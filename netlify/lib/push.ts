@@ -1,14 +1,21 @@
 import webpush from "web-push";
-import { buildDeclarativePayload, isGonePushStatus, type NotifyInput } from "../../shared/notify.ts";
+import {
+  buildDeclarativePayload,
+  createInboxId,
+  isGonePushStatus,
+  toInboxItem,
+  type NotifyInput,
+} from "../../shared/notify.ts";
 import type { StoredSubscription } from "../../shared/subscription.ts";
 import { getRuntimeEnv, vapidConfigured } from "./env.ts";
-import { deleteSubscription, listSubscriptions } from "./store.ts";
+import { deleteSubscription, listSubscriptions, putInboxItem } from "./store.ts";
 
 export type SendSummary = {
   delivered: number;
   failed: number;
   pruned: number;
   errors: string[];
+  id?: string;
 };
 
 let vapidApplied = false;
@@ -27,11 +34,16 @@ function applyVapid(): void {
 export async function sendToAllSubscriptions(
   input: NotifyInput,
   origin: string,
+  options?: { persistInbox?: boolean; inboxId?: string },
 ): Promise<SendSummary> {
   applyVapid();
-  const payload = JSON.stringify(buildDeclarativePayload(input, origin));
+  const inboxId = options?.inboxId ?? createInboxId();
+  if (options?.persistInbox !== false) {
+    await putInboxItem(toInboxItem(input, inboxId));
+  }
+  const payload = JSON.stringify(buildDeclarativePayload(input, origin, inboxId));
   const subscriptions = await listSubscriptions();
-  const summary: SendSummary = { delivered: 0, failed: 0, pruned: 0, errors: [] };
+  const summary: SendSummary = { delivered: 0, failed: 0, pruned: 0, errors: [], id: inboxId };
 
   for (const { key, value } of subscriptions) {
     try {

@@ -1,6 +1,7 @@
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { getStore } from "@netlify/blobs";
+import type { InboxItem } from "../../shared/notify.ts";
 import type { StoredSubscription } from "../../shared/subscription.ts";
 
 export type BlobStore = {
@@ -12,6 +13,9 @@ export type BlobStore = {
 
 const SUBSCRIPTIONS = "subscriptions";
 const TOKENS = "tokens";
+const INBOX = "inbox";
+const INBOX_INDEX_KEY = "_index";
+const INBOX_MAX = 100;
 
 export function subscriptionsStore(): BlobStore {
   return openStore(SUBSCRIPTIONS);
@@ -19,6 +23,10 @@ export function subscriptionsStore(): BlobStore {
 
 export function tokensStore(): BlobStore {
   return openStore(TOKENS);
+}
+
+export function inboxStore(): BlobStore {
+  return openStore(INBOX);
 }
 
 export async function putSubscription(subscription: StoredSubscription): Promise<string> {
@@ -47,6 +55,37 @@ export async function listSubscriptions(): Promise<Array<{ key: string; value: S
     }
   }
   return rows;
+}
+
+export async function putInboxItem(item: InboxItem): Promise<void> {
+  const store = inboxStore();
+  await store.setJSON(item.id, item);
+  const index = (await store.getJSON<string[]>(INBOX_INDEX_KEY)) ?? [];
+  const next = [item.id, ...index.filter((id) => id !== item.id)];
+  const pruned = next.slice(INBOX_MAX);
+  const kept = next.slice(0, INBOX_MAX);
+  await store.setJSON(INBOX_INDEX_KEY, kept);
+  for (const id of pruned) {
+    await store.delete(id);
+  }
+}
+
+export async function getInboxItem(id: string): Promise<InboxItem | null> {
+  if (!id || id === INBOX_INDEX_KEY) return null;
+  return inboxStore().getJSON<InboxItem>(id);
+}
+
+export async function listInboxItems(limit = 50): Promise<InboxItem[]> {
+  const store = inboxStore();
+  const index = (await store.getJSON<string[]>(INBOX_INDEX_KEY)) ?? [];
+  const items: InboxItem[] = [];
+  for (const id of index.slice(0, Math.max(1, Math.min(limit, INBOX_MAX)))) {
+    const item = await store.getJSON<InboxItem>(id);
+    if (item?.id && item.title) {
+      items.push(item);
+    }
+  }
+  return items;
 }
 
 export async function subscriptionKey(endpoint: string): Promise<string> {
