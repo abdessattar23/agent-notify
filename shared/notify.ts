@@ -8,6 +8,8 @@ export type NotifyAction = {
   id?: string;
   agent?: string;
   hint?: string;
+  theme?: string;
+  message?: string;
 };
 
 export type NotifyInput = {
@@ -71,6 +73,8 @@ const IMAGE_MAX = 2000;
 const ACTION_TITLE_MAX = 40;
 const ACTION_TEXT_MAX = 2000;
 const ACTION_HINT_MAX = 500;
+const ACTION_THEME_MAX = 32;
+const ACTION_MESSAGE_MAX = 500;
 const ACTION_AGENT_MAX = 120;
 const MAX_ACTIONS = 3;
 const DATA_JSON_MAX = 8000;
@@ -185,6 +189,9 @@ export function actionNavigatePath(
       const params = new URLSearchParams();
       if (action.agent) params.set("agent", action.agent);
       if (action.hint) params.set("hint", action.hint);
+      if (action.theme) params.set("theme", action.theme);
+      if (action.message) params.set("message", action.message);
+      if (action.title) params.set("title", action.title);
       if (action.id) params.set("id", action.id);
       else if (inboxId) params.set("id", inboxId);
       const query = params.toString();
@@ -404,6 +411,10 @@ function optionalAction(
   if (typeof agent === "object") return agent;
   const hint = optionalString(record.hint, `${field}.hint`, ACTION_HINT_MAX);
   if (typeof hint === "object") return hint;
+  const theme = optionalString(record.theme, `${field}.theme`, ACTION_THEME_MAX);
+  if (typeof theme === "object") return theme;
+  const message = optionalString(record.message, `${field}.message`, ACTION_MESSAGE_MAX);
+  if (typeof message === "object") return message;
 
   if (type === "link" && !url) {
     return { error: `${field}.url is required for link actions` };
@@ -420,6 +431,8 @@ function optionalAction(
     ...(id ? { id } : {}),
     ...(agent ? { agent } : {}),
     ...(hint ? { hint } : {}),
+    ...(theme ? { theme } : {}),
+    ...(message ? { message } : {}),
   };
 }
 
