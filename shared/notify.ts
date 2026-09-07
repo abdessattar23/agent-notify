@@ -8,8 +8,11 @@ export type NotifyAction = {
   id?: string;
   agent?: string;
   hint?: string;
-  theme?: string;
   message?: string;
+  emoji?: string;
+  subtitle?: string;
+  bg?: string;
+  color?: string;
 };
 
 export type NotifyInput = {
@@ -73,14 +76,101 @@ const IMAGE_MAX = 2000;
 const ACTION_TITLE_MAX = 40;
 const ACTION_TEXT_MAX = 2000;
 const ACTION_HINT_MAX = 500;
-const ACTION_THEME_MAX = 32;
 const ACTION_MESSAGE_MAX = 500;
 const ACTION_AGENT_MAX = 120;
+const ACTION_EMOJI_MAX = 32;
+const ACTION_SUBTITLE_MAX = 200;
+const ACTION_BG_MAX = 280;
+const ACTION_COLOR_MAX = 64;
 const MAX_ACTIONS = 3;
 const DATA_JSON_MAX = 8000;
 const COPY_QUERY_MAX = 500;
 
 const ACTION_TYPES = new Set<ActionType>(["open_app", "link", "inbox", "show_box", "copy"]);
+
+const NAMED_COLORS = new Set([
+  "white",
+  "black",
+  "red",
+  "green",
+  "blue",
+  "yellow",
+  "orange",
+  "purple",
+  "pink",
+  "cyan",
+  "magenta",
+  "gray",
+  "grey",
+  "silver",
+  "gold",
+  "navy",
+  "teal",
+  "maroon",
+  "olive",
+  "lime",
+  "aqua",
+  "fuchsia",
+  "transparent",
+  "currentcolor",
+  "inherit",
+]);
+
+const CSS_UNSAFE =
+  /url\s*\(|expression\s*\(|javascript\s*:|@import|<script|;/i;
+
+export function hasBalancedQuotes(value: string): boolean {
+  let single = 0;
+  let double = 0;
+  for (const ch of value) {
+    if (ch === "'") single += 1;
+    if (ch === '"') double += 1;
+  }
+  return single % 2 === 0 && double % 2 === 0;
+}
+
+export function isCssValueSafe(value: string): boolean {
+  if (!value || CSS_UNSAFE.test(value) || !hasBalancedQuotes(value)) {
+    return false;
+  }
+  return true;
+}
+
+const HEX_COLOR = /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+const FUNC_COLOR = /^(?:rgba?|hsla?)\([\d\s.,%\/deg+-]+\)$/i;
+const GRADIENT =
+  /^(?:linear-gradient|radial-gradient|repeating-linear-gradient)\([\s\S]+\)$/i;
+
+function isFunctionColor(value: string): boolean {
+  return FUNC_COLOR.test(value);
+}
+
+function isAllowedGradient(value: string): boolean {
+  return GRADIENT.test(value);
+}
+
+export function sanitizeCssColor(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > ACTION_COLOR_MAX) return undefined;
+  if (!isCssValueSafe(trimmed)) return undefined;
+  const lower = trimmed.toLowerCase();
+  if (NAMED_COLORS.has(lower)) return lower;
+  if (HEX_COLOR.test(trimmed)) return trimmed;
+  if (isFunctionColor(trimmed)) return trimmed;
+  return undefined;
+}
+
+export function sanitizeCssBackground(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > ACTION_BG_MAX) return undefined;
+  if (!isCssValueSafe(trimmed)) return undefined;
+  const lower = trimmed.toLowerCase();
+  if (NAMED_COLORS.has(lower)) return lower;
+  if (HEX_COLOR.test(trimmed)) return trimmed;
+  if (isFunctionColor(trimmed)) return trimmed;
+  if (isAllowedGradient(trimmed)) return trimmed;
+  return undefined;
+}
 
 export function parseNotifyBody(raw: unknown): NotifyInput | { error: string } {
   if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
@@ -189,9 +279,12 @@ export function actionNavigatePath(
       const params = new URLSearchParams();
       if (action.agent) params.set("agent", action.agent);
       if (action.hint) params.set("hint", action.hint);
-      if (action.theme) params.set("theme", action.theme);
       if (action.message) params.set("message", action.message);
       if (action.title) params.set("title", action.title);
+      if (action.emoji) params.set("emoji", action.emoji);
+      if (action.subtitle) params.set("subtitle", action.subtitle);
+      if (action.bg) params.set("bg", action.bg);
+      if (action.color) params.set("color", action.color);
       if (action.id) params.set("id", action.id);
       else if (inboxId) params.set("id", inboxId);
       const query = params.toString();
@@ -411,10 +504,42 @@ function optionalAction(
   if (typeof agent === "object") return agent;
   const hint = optionalString(record.hint, `${field}.hint`, ACTION_HINT_MAX);
   if (typeof hint === "object") return hint;
-  const theme = optionalString(record.theme, `${field}.theme`, ACTION_THEME_MAX);
-  if (typeof theme === "object") return theme;
   const message = optionalString(record.message, `${field}.message`, ACTION_MESSAGE_MAX);
   if (typeof message === "object") return message;
+  const emoji = optionalString(record.emoji, `${field}.emoji`, ACTION_EMOJI_MAX);
+  if (typeof emoji === "object") return emoji;
+  const subtitle = optionalString(record.subtitle, `${field}.subtitle`, ACTION_SUBTITLE_MAX);
+  if (typeof subtitle === "object") return subtitle;
+
+  let bg: string | undefined;
+  if (record.bg !== undefined && record.bg !== null && record.bg !== "") {
+    if (typeof record.bg !== "string") {
+      return { error: `${field}.bg must be a string` };
+    }
+    if (record.bg.length > ACTION_BG_MAX) {
+      return { error: `${field}.bg must be ${ACTION_BG_MAX} characters or fewer` };
+    }
+    const sanitized = sanitizeCssBackground(record.bg);
+    if (!sanitized) {
+      return { error: `${field}.bg is not a safe CSS background value` };
+    }
+    bg = sanitized;
+  }
+
+  let color: string | undefined;
+  if (record.color !== undefined && record.color !== null && record.color !== "") {
+    if (typeof record.color !== "string") {
+      return { error: `${field}.color must be a string` };
+    }
+    if (record.color.length > ACTION_COLOR_MAX) {
+      return { error: `${field}.color must be ${ACTION_COLOR_MAX} characters or fewer` };
+    }
+    const sanitized = sanitizeCssColor(record.color);
+    if (!sanitized) {
+      return { error: `${field}.color is not a safe CSS color value` };
+    }
+    color = sanitized;
+  }
 
   if (type === "link" && !url) {
     return { error: `${field}.url is required for link actions` };
@@ -431,8 +556,11 @@ function optionalAction(
     ...(id ? { id } : {}),
     ...(agent ? { agent } : {}),
     ...(hint ? { hint } : {}),
-    ...(theme ? { theme } : {}),
     ...(message ? { message } : {}),
+    ...(emoji ? { emoji } : {}),
+    ...(subtitle ? { subtitle } : {}),
+    ...(bg ? { bg } : {}),
+    ...(color ? { color } : {}),
   };
 }
 
