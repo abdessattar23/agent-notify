@@ -1,4 +1,4 @@
-const CACHE = "agent-notify-v1";
+const CACHE = "agent-notify-v2";
 const PRECACHE = ["/", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png"];
 
 self.addEventListener("install", (event) => {
@@ -43,24 +43,57 @@ self.addEventListener("push", (event) => {
   const notification = payload.notification ?? payload;
   const title = notification.title || "Agent Notify";
   const navigate = notification.navigate || "/";
+  const actions = Array.isArray(notification.actions) ? notification.actions : [];
+  const actionMap = {};
+  for (const entry of actions) {
+    if (entry && typeof entry.action === "string" && typeof entry.navigate === "string") {
+      actionMap[entry.action] = entry.navigate;
+    }
+  }
 
-  event.waitUntil(
-    self.registration.showNotification(title, {
-      body: notification.body || "",
-      icon: notification.icon || "/icons/icon-192.png",
-      badge: notification.badge || "/icons/icon-192.png",
-      lang: notification.lang || "en-US",
-      dir: notification.dir || "ltr",
-      silent: false,
-      tag: notification.tag,
-      data: { url: navigate },
-    }),
-  );
+  const options = {
+    body: notification.body || "",
+    icon: notification.icon || "/icons/icon-192.png",
+    badge: notification.badge || "/icons/icon-192.png",
+    lang: notification.lang || "en-US",
+    dir: notification.dir || "ltr",
+    silent: false,
+    tag: notification.tag,
+    data: {
+      url: navigate,
+      actions: actionMap,
+      inboxId: notification.data?.inboxId,
+    },
+    actions: actions.map((entry) => ({
+      action: entry.action,
+      title: entry.title || entry.action,
+      ...(entry.icon ? { icon: entry.icon } : {}),
+    })),
+  };
+
+  if (notification.image) {
+    options.image = notification.image;
+  }
+
+  const tasks = [self.registration.showNotification(title, options)];
+  if (notification.app_badge != null && self.navigator && self.navigator.setAppBadge) {
+    const count = Number.parseInt(String(notification.app_badge), 10);
+    if (Number.isFinite(count) && count >= 0) {
+      tasks.push(self.navigator.setAppBadge(count));
+    }
+  }
+
+  event.waitUntil(Promise.all(tasks));
 });
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const target = event.notification.data?.url || "/";
+  const actionId = event.action;
+  const data = event.notification.data || {};
+  let target = data.url || "/";
+  if (actionId && data.actions && data.actions[actionId]) {
+    target = data.actions[actionId];
+  }
   event.waitUntil(openTarget(target));
 });
 
