@@ -6,7 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHint, CardTitle } from "@/components/ui/card";
 import { fetchInboxItem } from "@/lib/api";
 import { loadSecret } from "@/lib/secret";
-import { copyTextFromInboxItem } from "../../shared/notify.ts";
+import {
+  copyTextFromInboxItem,
+  sanitizeCssBackground,
+  sanitizeCssColor,
+} from "../../shared/notify.ts";
 
 export function GoAppPage() {
   const navigate = useNavigate();
@@ -146,36 +150,49 @@ export function GoBoxPage() {
   const agent = params.get("agent");
   const hint = params.get("hint");
   const id = params.get("id");
-  const theme = (params.get("theme") || "").toLowerCase();
-  const message = params.get("message") || hint;
-  const headline = params.get("title") || (theme === "pride" ? "you're gay 🏳️‍🌈" : "Show computer preview");
+  const message = params.get("message");
+  const emoji = params.get("emoji");
+  const subtitle = params.get("subtitle");
+  const bg = sanitizeCssBackground(params.get("bg") ?? "") ?? undefined;
+  const color = sanitizeCssColor(params.get("color") ?? "") ?? undefined;
+  const custom = Boolean(bg || color || emoji || subtitle || message);
+  const headline = params.get("title") || (custom ? "Box" : "Show computer preview");
   const agentLabel = agent || "your agent";
-  const pride = theme === "pride" || theme === "gay" || theme === "rainbow";
+  const textStyle = color ? { color } : undefined;
 
-  if (pride) {
+  if (custom) {
     return (
       <main
         className="mx-auto flex min-h-dvh w-full max-w-xl flex-col gap-4 px-4 py-10"
-        style={{
-          background:
-            "linear-gradient(180deg,#e40303 0%,#ff8c00 16%,#ffed00 33%,#008026 50%,#24408e 66%,#732982 83%,#e40303 100%)",
-        }}
+        style={{ background: bg || "#10211c" }}
       >
-        <Card className="border-0 bg-black/55 text-foam shadow-2xl backdrop-blur-md">
-          <p className="text-center text-5xl leading-none">🏳️‍🌈</p>
-          <CardTitle className="mt-4 text-center text-3xl font-serif text-foam">{headline}</CardTitle>
-          <p className="mt-4 text-center text-lg leading-7 text-foam/95">
-            {message || "this is not a drill. pride briefing complete. you are gay. periodt."}
-          </p>
-          <p className="mt-6 text-center text-sm uppercase tracking-[0.2em] text-foam/70">
-            official gay department · no notes · only vibes
-          </p>
+        <Card className="border-0 bg-black/55 text-foam shadow-2xl backdrop-blur-md" style={textStyle}>
+          {emoji ? <p className="text-center text-5xl leading-none">{emoji}</p> : null}
+          <CardTitle
+            className={`text-center text-3xl font-serif text-foam ${emoji ? "mt-4" : ""}`}
+            style={textStyle}
+          >
+            {headline}
+          </CardTitle>
+          {message ? (
+            <p className="mt-4 text-center text-lg leading-7 text-foam/95" style={textStyle}>
+              {message}
+            </p>
+          ) : null}
+          {subtitle ? (
+            <p
+              className="mt-6 text-center text-sm uppercase tracking-[0.2em] text-foam/70"
+              style={textStyle}
+            >
+              {subtitle}
+            </p>
+          ) : null}
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
             <Button asChild>
-              <Link to={id ? `/inbox/${encodeURIComponent(id)}` : "/inbox"}>Inbox receipts</Link>
+              <Link to={id ? `/inbox/${encodeURIComponent(id)}` : "/inbox"}>Inbox</Link>
             </Button>
             <Button asChild variant="secondary">
-              <Link to="/">Flee home</Link>
+              <Link to="/">Home</Link>
             </Button>
           </div>
         </Card>
@@ -190,37 +207,35 @@ export function GoBoxPage() {
           <MonitorSmartphone className="size-5 text-signal" />
           {headline}
         </CardTitle>
-        {message ? (
-          <p className="mt-3 text-sm leading-6 text-foam">{message}</p>
-        ) : (
-          <CardHint>
-            Agent Notify cannot open a Grok Bot deep link. Open the agent box from Cursor / Grok Bot
-            yourself.
-          </CardHint>
-        )}
-        {!message ? (
-          <ol className="mt-4 space-y-3 text-sm leading-6 text-mist">
-            <li>1. Open <strong className="text-foam">Grok Bot</strong> (or Cursor).</li>
+        <CardHint>
+          Agent Notify cannot open a Grok Bot deep link. Open the agent box from Cursor / Grok Bot
+          yourself.
+        </CardHint>
+        <ol className="mt-4 space-y-3 text-sm leading-6 text-mist">
+          <li>
+            1. Open <strong className="text-foam">Grok Bot</strong> (or Cursor).
+          </li>
+          <li>
+            2. Open the agent run
+            {agent ? (
+              <>
+                {" "}
+                named <code className="text-signal">{agentLabel}</code>
+              </>
+            ) : (
+              " that sent this ping"
+            )}
+            .
+          </li>
+          <li>
+            3. Open the agent’s <strong className="text-foam">computer preview</strong> / desktop.
+          </li>
+          {hint ? (
             <li>
-              2. Open the agent run
-              {agent ? (
-                <>
-                  {" "}
-                  named <code className="text-signal">{agentLabel}</code>
-                </>
-              ) : (
-                " that sent this ping"
-              )}
-              .
+              4. Hint: <span className="text-foam">{hint}</span>
             </li>
-            <li>3. Open the agent’s <strong className="text-foam">computer preview</strong> / desktop.</li>
-            {hint ? (
-              <li>
-                4. Hint: <span className="text-foam">{hint}</span>
-              </li>
-            ) : null}
-          </ol>
-        ) : null}
+          ) : null}
+        </ol>
         {id ? <p className="mt-3 text-xs text-mist/70">Inbox id: {id}</p> : null}
         <div className="mt-5 flex flex-col gap-3 sm:flex-row">
           <Button asChild>
