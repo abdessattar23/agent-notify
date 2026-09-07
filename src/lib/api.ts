@@ -1,0 +1,83 @@
+export type HealthResponse = {
+  ok: boolean;
+  service: string;
+  vapidConfigured: boolean;
+  agentTokenConfigured: boolean;
+  ownerSetupRequired: boolean;
+  subscriptionCount: number;
+};
+
+export type NotifySummary = {
+  ok: boolean;
+  delivered?: number;
+  failed?: number;
+  pruned?: number;
+  errors?: string[];
+  error?: string;
+};
+
+function ownerHeaders(secret: string): HeadersInit {
+  return secret ? { "X-Owner-Secret": secret } : {};
+}
+
+export async function fetchHealth(): Promise<HealthResponse> {
+  const res = await fetch("/api/health");
+  if (!res.ok) {
+    throw new Error(`Health check failed (${res.status})`);
+  }
+  return (await res.json()) as HealthResponse;
+}
+
+export async function fetchVapidPublicKey(): Promise<string> {
+  const res = await fetch("/api/vapid-public-key");
+  const data = (await res.json()) as { ok?: boolean; publicKey?: string; error?: string };
+  if (!res.ok || !data.publicKey) {
+    throw new Error(data.error ?? "VAPID public key unavailable");
+  }
+  return data.publicKey;
+}
+
+export async function postSubscription(
+  subscription: PushSubscriptionJSON,
+  secret: string,
+): Promise<void> {
+  const res = await fetch("/api/subscribe", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      ...ownerHeaders(secret),
+    },
+    body: JSON.stringify(subscription),
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error ?? `Subscribe failed (${res.status})`);
+  }
+}
+
+export async function deleteSubscription(endpoint: string, secret: string): Promise<void> {
+  const res = await fetch("/api/subscribe", {
+    method: "DELETE",
+    headers: {
+      "content-type": "application/json",
+      ...ownerHeaders(secret),
+    },
+    body: JSON.stringify({ endpoint }),
+  });
+  if (!res.ok && res.status !== 404) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error ?? `Unsubscribe failed (${res.status})`);
+  }
+}
+
+export async function postTestPing(secret: string): Promise<NotifySummary> {
+  const res = await fetch("/api/ping", {
+    method: "POST",
+    headers: ownerHeaders(secret),
+  });
+  const data = (await res.json()) as NotifySummary;
+  if (!res.ok) {
+    throw new Error(data.error ?? `Ping failed (${res.status})`);
+  }
+  return data;
+}
