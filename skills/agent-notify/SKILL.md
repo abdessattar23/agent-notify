@@ -23,6 +23,23 @@ Prefer show_box instead of inventing deep links.
 
 See AGENT.md for the full contract.
 
-## show_box honesty
+## show_box
 
-Do not invent Grok Bot deep links. The /go/box page tells the owner to open Grok Bot, pick the agent, then open computer preview. Pass optional agent and hint query fields via the action.
+Bare `show_box` opens the honesty page (open Grok Bot → agent → computer preview). Pass optional `agent` and `hint`.
+
+To style the box page yourself, set any of `emoji`, `subtitle`, `message`, `bg`, or `color` on the action. That switches to a custom layout (no Grok instructions). `bg` / `color` are sanitized CSS values (hex, rgb/hsl, gradients for bg; no `url()`, `expression`, or `;`).
+
+```json
+{
+  "title": "Look",
+  "default_action": {
+    "type": "show_box",
+    "title": "Ready",
+    "emoji": "✨",
+    "message": "Preview is up",
+    "subtitle": "tap inbox for details",
+    "bg": "linear-gradient(180deg, #10211c 0%, #1a3a32 100%)",
+    "color": "#f5f5f4"
+  }
+}
+```
