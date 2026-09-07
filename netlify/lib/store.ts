@@ -14,7 +14,7 @@ export type BlobStore = {
 const SUBSCRIPTIONS = "subscriptions";
 const TOKENS = "tokens";
 const INBOX = "inbox";
-const INBOX_INDEX_KEY = "_index";
+const INBOX_INDEX_KEY = "index";
 const INBOX_MAX = 100;
 
 export function subscriptionsStore(): BlobStore {
@@ -77,15 +77,20 @@ export async function getInboxItem(id: string): Promise<InboxItem | null> {
 
 export async function listInboxItems(limit = 50): Promise<InboxItem[]> {
   const store = inboxStore();
-  const index = (await store.getJSON<string[]>(INBOX_INDEX_KEY)) ?? [];
+  let index = (await store.getJSON<string[]>(INBOX_INDEX_KEY)) ?? [];
+  if (index.length === 0) {
+    index = (await store.listKeys()).filter((key) => key !== INBOX_INDEX_KEY);
+  }
   const items: InboxItem[] = [];
-  for (const id of index.slice(0, Math.max(1, Math.min(limit, INBOX_MAX)))) {
+  const cap = Math.max(1, Math.min(limit, INBOX_MAX));
+  for (const id of index.slice(0, cap)) {
     const item = await store.getJSON<InboxItem>(id);
     if (item?.id && item.title) {
       items.push(item);
     }
   }
-  return items;
+  items.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
+  return items.slice(0, cap);
 }
 
 export async function subscriptionKey(endpoint: string): Promise<string> {

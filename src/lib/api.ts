@@ -1,3 +1,5 @@
+import type { InboxItem } from "../../shared/notify.ts";
+
 export type HealthResponse = {
   ok: boolean;
   service: string;
@@ -14,7 +16,10 @@ export type NotifySummary = {
   pruned?: number;
   errors?: string[];
   error?: string;
+  id?: string;
 };
+
+export type { InboxItem };
 
 function ownerHeaders(secret: string): HeadersInit {
   return secret ? { "X-Owner-Secret": secret } : {};
@@ -80,4 +85,26 @@ export async function postTestPing(secret: string): Promise<NotifySummary> {
     throw new Error(data.error ?? `Ping failed (${res.status})`);
   }
   return data;
+}
+
+export async function fetchInbox(secret: string, limit = 50): Promise<InboxItem[]> {
+  const res = await fetch(`/api/inbox?limit=${limit}`, {
+    headers: ownerHeaders(secret),
+  });
+  const data = (await res.json()) as { ok?: boolean; items?: InboxItem[]; error?: string };
+  if (!res.ok) {
+    throw new Error(data.error ?? `Ping failed (${res.status})`);
+  }
+  return data.items ?? [];
+}
+
+export async function fetchInboxItem(id: string, secret: string): Promise<InboxItem> {
+  const res = await fetch(`/api/inbox?id=${encodeURIComponent(id)}`, {
+    headers: ownerHeaders(secret),
+  });
+  const data = (await res.json()) as { ok?: boolean; item?: InboxItem; error?: string };
+  if (!res.ok || !data.item) {
+    throw new Error(data.error ?? `Inbox item failed (${res.status})`);
+  }
+  return data.item;
 }
