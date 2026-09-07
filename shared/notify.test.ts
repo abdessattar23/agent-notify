@@ -67,6 +67,41 @@ describe("parseNotifyBody", () => {
     });
     assert.equal("error" in result, true);
   });
+
+  it("accepts emoji, bg, color, subtitle on show_box", () => {
+    const parsed = parseNotifyBody({
+      title: "Styled",
+      default_action: {
+        type: "show_box",
+        title: "Hello",
+        emoji: "✨",
+        subtitle: "agent styled",
+        bg: "linear-gradient(180deg, #111111 0%, #333333 100%)",
+        color: "#ffffff",
+        message: "Custom box page",
+      },
+    });
+    assert.equal("error" in parsed, false);
+    if ("error" in parsed) return;
+    assert.equal(parsed.default_action?.emoji, "✨");
+    assert.equal(parsed.default_action?.subtitle, "agent styled");
+    assert.equal(parsed.default_action?.color, "#ffffff");
+    assert.match(parsed.default_action?.bg ?? "", /linear-gradient/);
+    assert.equal(parsed.default_action?.message, "Custom box page");
+  });
+
+  it("rejects unsafe bg values like url()", () => {
+    const result = parseNotifyBody({
+      title: "Bad bg",
+      default_action: {
+        type: "show_box",
+        bg: "url(https://evil)",
+      },
+    });
+    assert.equal("error" in result, true);
+    if (!("error" in result)) return;
+    assert.match(result.error, /bg/);
+  });
 });
 
 describe("declarative payload", () => {
@@ -139,5 +174,27 @@ describe("declarative payload", () => {
     assert.equal(isGonePushStatus(404), true);
     assert.equal(isGonePushStatus(410), true);
     assert.equal(isGonePushStatus(429), false);
+  });
+
+  it("encodes bg, color, and emoji on show_box navigate paths", () => {
+    const path = actionNavigatePath(
+      {
+        type: "show_box",
+        title: "Box",
+        emoji: "🎯",
+        bg: "#10211c",
+        color: "white",
+        message: "hi",
+        subtitle: "sub",
+      },
+      "inbox-9",
+    );
+    assert.match(path, /^\/go\/box\?/);
+    assert.match(path, /emoji=/);
+    assert.match(path, /bg=/);
+    assert.match(path, /color=/);
+    assert.match(path, /message=hi/);
+    assert.match(path, /subtitle=sub/);
+    assert.doesNotMatch(path, /theme=/);
   });
 });
