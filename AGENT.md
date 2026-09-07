@@ -6,7 +6,7 @@ Use this document when an AI agent should ping the owner. This is a **single-use
 
 `POST {SITE}/v1/notify`
 
-`SITE` is the Netlify origin, for example `https://example.netlify.app`.
+`SITE` is the Netlify origin, for example `https://agent-notify.netlify.app`.
 
 ## Authentication
 
@@ -23,27 +23,46 @@ The token is a Netlify environment variable. Never put it in the PWA, git, or a 
 {
   "title": "string, required, <= 120 chars",
   "body": "optional string, <= 2000 chars",
-  "url": "optional relative or absolute URL opened on tap",
-  "tag": "optional string; reused tags replace the previous notification"
+  "url": "optional legacy relative/absolute URL (maps to a link default_action)",
+  "tag": "optional string; reused tags replace the previous notification",
+  "image": "optional image URL shown on the notification",
+  "badge_count": "optional integer 0–9999 → Declarative app_badge",
+  "default_action": {
+    "type": "open_app | link | inbox | show_box | copy",
+    "title": "optional for default_action",
+    "url": "required for link",
+    "text": "required for copy",
+    "id": "optional inbox id override",
+    "agent": "optional show_box agent label",
+    "hint": "optional show_box hint"
+  },
+  "actions": [
+    {
+      "type": "open_app | link | inbox | show_box | copy",
+      "title": "button label, required, max 3 actions",
+      "url": "required for link",
+      "text": "required for copy",
+      "agent": "optional",
+      "hint": "optional"
+    }
+  ],
+  "data": { "any": "json object, serialized <= 8000 chars" }
 }
 ```
 
-The server wraps this in Declarative Web Push:
+Every rich tap is routed through the PWA:
 
-```json
-{
-  "web_push": 8030,
-  "mutable": true,
-  "notification": {
-    "title": "…",
-    "body": "…",
-    "navigate": "https://…",
-    "silent": false
-  }
-}
-```
+| Action | Opens |
+| --- | --- |
+| `open_app` | `/go/app` → home |
+| `link` | `/go/link?url=…` |
+| `inbox` | `/inbox/:id` |
+| `show_box` | `/go/box` honesty page (no fake Grok deep links) |
+| `copy` | `/go/copy` clipboard helper |
 
-Always user-visible. There is no silent-push flag you can set.
+If `default_action` is omitted and `url` is set, the default tap is a `link`. Otherwise the default tap opens the stored inbox item.
+
+The server wraps this in Declarative Web Push (`web_push: 8030`, `mutable: true`, `silent: false`) with `navigate`, optional `image` / `app_badge`, and `notification.actions` navigate URLs. Each notify is persisted for `GET /api/inbox`.
 
 ## Example
 
@@ -51,7 +70,17 @@ Always user-visible. There is no silent-push flag you can set.
 curl -sS -X POST "$SITE/v1/notify" \
   -H "Authorization: Bearer $AGENT_API_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"title":"Deploy ready","body":"Preview is up","url":"/"}'
+  -d '{
+    "title":"Deploy ready",
+    "body":"Preview is up",
+    "badge_count":1,
+    "default_action":{"type":"show_box","agent":"deploy-bot","hint":"Open computer preview"},
+    "actions":[
+      {"type":"copy","title":"Copy URL","text":"https://preview.example"},
+      {"type":"link","title":"Open PR","url":"https://github.com/example/pr/1"}
+    ],
+    "data":{"agent":"deploy-bot"}
+  }'
 ```
 
 ## Responses
@@ -66,30 +95,20 @@ curl -sS -X POST "$SITE/v1/notify" \
 | `429` | Hourly rate limit (default 30). Honor `Retry-After` |
 | `503` | VAPID or agent token missing on the site |
 
-Success body:
-
-```json
-{
-  "ok": true,
-  "delivered": 1,
-  "failed": 0,
-  "pruned": 0,
-  "errors": []
-}
-```
+Success body includes `id` (inbox item id), `delivered`, `failed`, `pruned`, `errors`.
 
 ## Rate limit
 
-Default **30 requests per UTC hour** per site (`RATE_LIMIT_PER_HOUR`). Bursting will get `429`. Batch status into one notification when you can.
+Default **30 requests per UTC hour** per site (`RATE_LIMIT_PER_HOUR`).
 
 ## When to notify
 
-Good: build failed, long job finished, calendar reminder, human-needed approval.
+Good: build failed, long job finished, human-needed approval, “look at my box”.
 
-Bad: heartbeats, debug traces, every token of a stream, anything the owner did not ask to be woken for.
+Bad: heartbeats, debug traces, streaming tokens.
 
-If `409 no_subscriptions`, tell the owner to open the Home Screen app and tap **Enable notifications**. Do not retry in a tight loop.
+If `409 no_subscriptions`, tell the owner to Enable notifications. Do not tight-loop.
 
 ## Other endpoints
 
-Agents only need `/v1/notify`. The PWA uses `/api/subscribe`, `/api/ping`, and `/api/vapid-public-key`. Those are owner-facing.
+Agents only need `/v1/notify`. Owner PWA uses `/api/subscribe`, `/api/ping`, `/api/inbox`, `/api/vapid-public-key`.
