@@ -34,7 +34,12 @@ The token is a Netlify environment variable. Never put it in the PWA, git, or a 
     "text": "required for copy",
     "id": "optional inbox id override",
     "agent": "optional show_box agent label",
-    "hint": "optional show_box hint"
+    "hint": "optional show_box hint",
+    "message": "optional show_box message",
+    "emoji": "optional show_box emoji (<=32)",
+    "subtitle": "optional show_box subtitle (<=200)",
+    "bg": "optional sanitized CSS background (<=280)",
+    "color": "optional sanitized CSS color (<=64)"
   },
   "actions": [
     {
@@ -43,7 +48,12 @@ The token is a Netlify environment variable. Never put it in the PWA, git, or a 
       "url": "required for link",
       "text": "required for copy",
       "agent": "optional",
-      "hint": "optional"
+      "hint": "optional",
+      "message": "optional",
+      "emoji": "optional",
+      "subtitle": "optional",
+      "bg": "optional",
+      "color": "optional"
     }
   ],
   "data": { "any": "json object, serialized <= 8000 chars" }
@@ -57,7 +67,7 @@ Every rich tap is routed through the PWA:
 | `open_app` | `/go/app` → home |
 | `link` | `/go/link?url=…` |
 | `inbox` | `/inbox/:id` |
-| `show_box` | `/go/box` honesty page (no fake Grok deep links) |
+| `show_box` | `/go/box` — bare: honesty/instructions; with `emoji`/`subtitle`/`message`/`bg`/`color`: agent-styled page |
 | `copy` | `/go/copy` clipboard helper |
 
 If `default_action` is omitted and `url` is set, the default tap is a `link`. Otherwise the default tap opens the stored inbox item.

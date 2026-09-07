@@ -117,7 +117,16 @@ Notify body (rich tap-actions):
   "tag": "optional-dedupe-key",
   "image": "optional",
   "badge_count": 1,
-  "default_action": { "type": "show_box", "hint": "Open computer preview" },
+  "default_action": {
+    "type": "show_box",
+    "title": "Ready",
+    "emoji": "✨",
+    "message": "Preview is up",
+    "subtitle": "optional caption",
+    "bg": "linear-gradient(180deg, #10211c 0%, #1a3a32 100%)",
+    "color": "#f5f5f4",
+    "hint": "Open computer preview"
+  },
   "actions": [
     { "type": "copy", "title": "Copy", "text": "…" },
     { "type": "link", "title": "Open", "url": "https://…" }
@@ -126,7 +135,7 @@ Notify body (rich tap-actions):
 }
 ```
 
-Action types: `open_app` | `link` | `inbox` | `show_box` | `copy` (max 3 buttons). Taps land on `/go/*` or `/inbox/:id`. The server always sends Declarative Web Push JSON (`web_push: 8030`, `mutable: true`, `silent: false`) with `navigate` + `notification.actions`. Dead endpoints (404/410) are deleted from Blobs. Each notify is stored for `GET /api/inbox`.
+Action types: `open_app` | `link` | `inbox` | `show_box` | `copy` (max 3 buttons). For `show_box`, optional `emoji` / `subtitle` / `message` / `bg` / `color` render a custom styled page; omit them for the default computer-preview instructions. `bg` and `color` are sanitized CSS (no `url()` / `expression` / `;`). Taps land on `/go/*` or `/inbox/:id`. The server always sends Declarative Web Push JSON (`web_push: 8030`, `mutable: true`, `silent: false`) with `navigate` + `notification.actions`. Dead endpoints (404/410) are deleted from Blobs. Each notify is stored for `GET /api/inbox`.
 
 ## Layout
 
