@@ -20,20 +20,9 @@
   [headers.values]
     Content-Type = "application/manifest+json"
 
-# Function routes are also declared on each handler via `export const config.path`.
-# These redirects keep /api and /v1 off the SPA fallback.
-[[redirects]]
-  from = "/api/*"
-  to = "/.netlify/functions/:splat"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/v1/notify"
-  to = "/.netlify/functions/notify"
-  status = 200
-  force = true
-
+# Function routes come from each handler export const config.path.
+# Do not shadow them with /.netlify/functions redirects (breaks Functions v2).
+# SPA fallback is last; Netlify serves function paths first.
 [[redirects]]
   from = "/*"
   to = "/index.html"

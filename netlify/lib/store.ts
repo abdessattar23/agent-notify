@@ -59,10 +59,21 @@ export async function subscriptionKey(endpoint: string): Promise<string> {
 }
 
 function openStore(name: string): BlobStore {
-  if (process.env.NETLIFY || process.env.NETLIFY_DEV) {
+  // Production Functions do not always set NETLIFY=true; Lambda markers do.
+  if (isNetlifyRuntime()) {
     return wrapNetlifyStore(name);
   }
   return createFileStore(name);
+}
+
+function isNetlifyRuntime(): boolean {
+  return Boolean(
+    process.env.NETLIFY ||
+      process.env.NETLIFY_DEV ||
+      process.env.NETLIFY_BLOBS_CONTEXT ||
+      process.env.AWS_LAMBDA_FUNCTION_NAME ||
+      process.env.LAMBDA_TASK_ROOT,
+  );
 }
 
 function wrapNetlifyStore(name: string): BlobStore {
