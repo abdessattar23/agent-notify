@@ -1,137 +1,130 @@
-#!/usr/bin/env node
-/**
- * Agent Notify MCP — sends Web Push to the owner iPhone via POST /v1/notify.
- *
- * Env:
- *   AGENT_NOTIFY_SITE   e.g. https://agent-notify.netlify.app
- *   AGENT_API_TOKEN     bearer token (Netlify AGENT_API_TOKEN)
- */
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { z } from "zod";
+import { createInterface } from "node:readline";
 
-const SITE = (process.env.AGENT_NOTIFY_SITE || process.env.SITE || "").replace(/\/$/, "");
-const TOKEN = (process.env.AGENT_API_TOKEN || "").trim();
+const SITE = (process.env.AGENT_NOTIFY_SITE || process.env.SITE_URL || "").replace(/\/$/, "");
+const TOKEN = process.env.AGENT_API_TOKEN || "";
 
-function requireConfig() {
+const TOOLS = [
+  {
+    name: "agent_notify",
+    description:
+      "Send a user-visible Web Push to the owner via Agent Notify. Supports tap-actions: open_app, link, inbox, show_box, copy.",
+    inputSchema: {
+      type: "object",
+      required: ["title"],
+      properties: {
+        title: { type: "string", maxLength: 120 },
+        body: { type: "string", maxLength: 2000 },
+        url: { type: "string" },
+        tag: { type: "string" },
+        image: { type: "string" },
+        badge_count: { type: "integer", minimum: 0, maximum: 9999 },
+        default_action: { type: "object" },
+        actions: {
+          type: "array",
+          maxItems: 3,
+          items: { type: "object" },
+        },
+        data: { type: "object" },
+      },
+    },
+  },
+];
+
+function send(message) {
+  process.stdout.write(`${JSON.stringify(message)}\n`);
+}
+
+async function notify(args) {
   if (!SITE) {
-    throw new Error("AGENT_NOTIFY_SITE is not set (e.g. https://agent-notify.netlify.app)");
+    throw new Error("AGENT_NOTIFY_SITE (or SITE_URL) is not set");
   }
   if (!TOKEN) {
     throw new Error("AGENT_API_TOKEN is not set");
   }
-}
-
-async function postNotify(body) {
-  requireConfig();
   const res = await fetch(`${SITE}/v1/notify`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${TOKEN}`,
-      "Content-Type": "application/json",
+      authorization: `Bearer ${TOKEN}`,
+      "content-type": "application/json",
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify(args),
   });
-  const text = await res.text();
-  let data;
-  try {
-    data = text ? JSON.parse(text) : {};
-  } catch {
-    data = { raw: text };
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || `notify failed (${res.status})`);
   }
-  return { status: res.status, data };
+  return data;
 }
 
-const server = new McpServer({
-  name: "agent-notify",
-  version: "1.0.0",
+const rl = createInterface({ input: process.stdin, crlfDelay: Infinity });
+
+rl.on("line", async (line) => {
+  let msg;
+  try {
+    msg = JSON.parse(line);
+  } catch {
+    return;
+  }
+  const { id, method, params } = msg;
+  try {
+    if (method === "initialize") {
+      send({
+        jsonrpc: "2.0",
+        id,
+        result: {
+          protocolVersion: "2024-11-05",
+          capabilities: { tools: {} },
+          serverInfo: { name: "agent-notify", version: "1.0.0" },
+        },
+      });
+      return;
+    }
+    if (method === "notifications/initialized") {
+      return;
+    }
+    if (method === "tools/list") {
+      send({ jsonrpc: "2.0", id, result: { tools: TOOLS } });
+      return;
+    }
+    if (method === "tools/call") {
+      const name = params?.name;
+      const args = params?.arguments ?? {};
+      if (name !== "agent_notify") {
+        send({
+          jsonrpc: "2.0",
+          id,
+          error: { code: -32601, message: `Unknown tool: ${name}` },
+        });
+        return;
+      }
+      const result = await notify(args);
+      send({
+        jsonrpc: "2.0",
+        id,
+        result: {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        },
+      });
+      return;
+    }
+    if (id !== undefined) {
+      send({
+        jsonrpc: "2.0",
+        id,
+        error: { code: -32601, message: `Method not found: ${method}` },
+      });
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (id !== undefined) {
+      send({
+        jsonrpc: "2.0",
+        id,
+        result: {
+          content: [{ type: "text", text: message }],
+          isError: true,
+        },
+      });
+    }
+  }
 });
-
-server.tool(
-  "notify",
-  "Send a user-visible Web Push to the owner iPhone via Agent Notify. Use for build failures, finished jobs, or approvals — not heartbeats. Rate limit ~30/hour.",
-  {
-    title: z.string().min(1).max(120).describe("Notification title"),
-    body: z.string().max(2000).optional().describe("Optional body text"),
-    url: z.string().max(2000).optional().describe("Optional relative or absolute URL opened on tap"),
-    tag: z.string().max(200).optional().describe("Optional tag; same tag replaces the previous notification"),
-  },
-  async ({ title, body, url, tag }) => {
-    const payload = { title };
-    if (body !== undefined) payload.body = body;
-    if (url !== undefined) payload.url = url;
-    if (tag !== undefined) payload.tag = tag;
-    try {
-      const { status, data } = await postNotify(payload);
-      const ok = status === 200 || status === 207;
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify({ ok, status, site: SITE, ...data }, null, 2),
-          },
-        ],
-        isError: !ok,
-      };
-    } catch (error) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              {
-                ok: false,
-                error: error instanceof Error ? error.message : String(error),
-              },
-              null,
-              2,
-            ),
-          },
-        ],
-        isError: true,
-      };
-    }
-  },
-);
-
-server.tool(
-  "health",
-  "Check Agent Notify site health (vapidConfigured, agentTokenConfigured, subscriptionCount).",
-  {},
-  async () => {
-    try {
-      requireConfig();
-      const res = await fetch(`${SITE}/api/health`);
-      const data = await res.json();
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify({ status: res.status, site: SITE, ...data }, null, 2),
-          },
-        ],
-        isError: !res.ok,
-      };
-    } catch (error) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              {
-                ok: false,
-                error: error instanceof Error ? error.message : String(error),
-              },
-              null,
-              2,
-            ),
-          },
-        ],
-        isError: true,
-      };
-    }
-  },
-);
-
-const transport = new StdioServerTransport();
-await server.connect(transport);
