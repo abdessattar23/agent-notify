@@ -93,7 +93,7 @@ export async function fetchInbox(secret: string, limit = 50): Promise<InboxItem[
   });
   const data = (await res.json()) as { ok?: boolean; items?: InboxItem[]; error?: string };
   if (!res.ok) {
-    throw new Error(data.error ?? `Ping failed (${res.status})`);
+    throw new Error(data.error ?? `Inbox failed (${res.status})`);
   }
   return data.items ?? [];
 }
