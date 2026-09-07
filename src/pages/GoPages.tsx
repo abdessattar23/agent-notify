@@ -170,7 +170,14 @@ export function GoBoxPage() {
           <p className="mt-6 text-center text-sm uppercase tracking-[0.2em] text-foam/70">
             official gay department · no notes · only vibes
           </p>
-          <div className="mt and more"></div>
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
+            <Button asChild>
+              <Link to={id ? `/inbox/${encodeURIComponent(id)}` : "/inbox"}>Inbox receipts</Link>
+            </Button>
+            <Button asChild variant="secondary">
+              <Link to="/">Flee home</Link>
+            </Button>
+          </div>
         </Card>
       </main>
     );
@@ -183,6 +190,46 @@ export function GoBoxPage() {
           <MonitorSmartphone className="size-5 text-signal" />
           {headline}
         </CardTitle>
+        {message ? (
+          <p className="mt-3 text-sm leading-6 text-foam">{message}</p>
+        ) : (
+          <CardHint>
+            Agent Notify cannot open a Grok Bot deep link. Open the agent box from Cursor / Grok Bot
+            yourself.
+          </CardHint>
+        )}
+        {!message ? (
+          <ol className="mt-4 space-y-3 text-sm leading-6 text-mist">
+            <li>1. Open <strong className="text-foam">Grok Bot</strong> (or Cursor).</li>
+            <li>
+              2. Open the agent run
+              {agent ? (
+                <>
+                  {" "}
+                  named <code className="text-signal">{agentLabel}</code>
+                </>
+              ) : (
+                " that sent this ping"
+              )}
+              .
+            </li>
+            <li>3. Open the agent’s <strong className="text-foam">computer preview</strong> / desktop.</li>
+            {hint ? (
+              <li>
+                4. Hint: <span className="text-foam">{hint}</span>
+              </li>
+            ) : null}
+          </ol>
+        ) : null}
+        {id ? <p className="mt-3 text-xs text-mist/70">Inbox id: {id}</p> : null}
+        <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+          <Button asChild>
+            <Link to={id ? `/inbox/${encodeURIComponent(id)}` : "/inbox"}>View inbox item</Link>
+          </Button>
+          <Button asChild variant="secondary">
+            <Link to="/">Back home</Link>
+          </Button>
+        </div>
       </Card>
     </main>
   );
