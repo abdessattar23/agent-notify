@@ -10,23 +10,10 @@ On iPhone, **Add to Home Screen is required**. Safari tabs cannot receive Web Pu
 
 ## What you get
 
-- PWA: install instructions, standalone detection, Enable notifications, status, test ping, `display: standalone` manifest + icons, service worker
-- API: health, VAPID public key, subscribe / unsubscribe, authenticated notify, hourly rate limit, prune of dead subscriptions (404/410)
+- PWA: install instructions, standalone detection, Enable notifications, status, test ping, inbox + `/go/*` tap router, `display: standalone` manifest + icons, service worker
+- API: health, VAPID public key, subscribe / unsubscribe, authenticated notify with action buttons, inbox Blobs store, hourly rate limit, prune of dead subscriptions (404/410)
 - Local preview server that uses the same function handlers (file-backed blobs when not on Netlify)
-- MCP + skill under [`mcp/`](./mcp/) and [`skills/agent-notify/`](./skills/agent-notify/) so agents can notify without raw curl
-
-## MCP + skill
-
-```bash
-cd mcp && npm install
-export AGENT_NOTIFY_SITE="https://agent-notify.netlify.app"
-export AGENT_API_TOKEN="your-netlify-AGENT_API_TOKEN"
-node src/index.js
-```
-
-Tools: `notify` (title, optional body/url/tag), `health`.
-
-Cursor skill: copy or symlink [`skills/agent-notify`](./skills/agent-notify) into `~/.cursor/skills/`. Details: [mcp/README.md](./mcp/README.md).
+- MCP server + skill under `mcp/` and `skills/agent-notify/` for agents
 
 ## Deploy on Netlify
 
@@ -117,29 +104,38 @@ Chrome on localhost can subscribe and receive push. An iPhone still needs the Ne
 | `POST` | `/api/subscribe` | `X-Owner-Secret` if configured | Store a push subscription in Blobs |
 | `DELETE` | `/api/subscribe` | `X-Owner-Secret` if configured | Remove a subscription |
 | `POST` | `/api/ping` | `X-Owner-Secret` if configured | Owner test push |
+| `GET` | `/api/inbox` / `/api/inbox/:id` | `X-Owner-Secret` if configured | Owner inbox |
 | `POST` | `/v1/notify` | `Authorization: Bearer $AGENT_API_TOKEN` | Agent push (rate limited) |
 
-Notify body:
+Notify body (rich tap-actions):
 
 ```json
 {
   "title": "Required, max 120 chars",
   "body": "Optional",
-  "url": "/optional/relative-or-absolute",
-  "tag": "optional-dedupe-key"
+  "url": "legacy optional URL → link default_action",
+  "tag": "optional-dedupe-key",
+  "image": "optional",
+  "badge_count": 1,
+  "default_action": { "type": "show_box", "hint": "Open computer preview" },
+  "actions": [
+    { "type": "copy", "title": "Copy", "text": "…" },
+    { "type": "link", "title": "Open", "url": "https://…" }
+  ],
+  "data": { "agent": "optional" }
 }
 ```
 
-The server always sends Declarative Web Push JSON. Dead endpoints (404/410) are deleted from Blobs.
+Action types: `open_app` | `link` | `inbox` | `show_box` | `copy` (max 3 buttons). Taps land on `/go/*` or `/inbox/:id`. The server always sends Declarative Web Push JSON (`web_push: 8030`, `mutable: true`, `silent: false`) with `navigate` + `notification.actions`. Dead endpoints (404/410) are deleted from Blobs. Each notify is stored for `GET /api/inbox`.
 
 ## Layout
 
 ```
-mcp/                 Stdio MCP server (notify + health)
-skills/agent-notify/ Cursor skill for when/how to ping
 netlify/functions/   TypeScript Functions 2.0 handlers
-netlify/lib/         Blobs, VAPID, auth, rate limit
-public/sw.js         Push + offline shell
-src/                 PWA UI
+netlify/lib/         Blobs, VAPID, auth, rate limit, inbox
+public/sw.js         Push + action clicks + offline shell
+src/                 PWA UI (home, inbox, /go router)
 shared/              Payload validation used by Functions
+mcp/                 MCP server for notify
+skills/agent-notify/ Agent skill docs
 ```
