@@ -2,6 +2,8 @@
 
 Personal [Netlify](https://www.netlify.com/) PWA + API. Authenticated AI agents `POST /v1/notify`; you get a Web Push on the iPhone Home Screen app (iOS 16.4+ and iOS 26).
 
+**Live:** https://agent-notify.netlify.app
+
 This is a single-user MVP. Hosting is **Netlify static files + Netlify Functions**. Subscriptions and rate-limit/token usage live in **Netlify Blobs**. There are no Cloudflare Workers.
 
 On iPhone, **Add to Home Screen is required**. Safari tabs cannot receive Web Push. Permission is requested only from a user gesture. Payloads use [Declarative Web Push](https://webkit.org/blog/16535/meet-declarative-web-push/) (`web_push: 8030`) so iOS can show a notification even if the service worker was evicted. Silent push is never sent (`userVisibleOnly` + `silent: false`).
@@ -11,6 +13,20 @@ On iPhone, **Add to Home Screen is required**. Safari tabs cannot receive Web Pu
 - PWA: install instructions, standalone detection, Enable notifications, status, test ping, `display: standalone` manifest + icons, service worker
 - API: health, VAPID public key, subscribe / unsubscribe, authenticated notify, hourly rate limit, prune of dead subscriptions (404/410)
 - Local preview server that uses the same function handlers (file-backed blobs when not on Netlify)
+- MCP + skill under [`mcp/`](./mcp/) and [`skills/agent-notify/`](./skills/agent-notify/) so agents can notify without raw curl
+
+## MCP + skill
+
+```bash
+cd mcp && npm install
+export AGENT_NOTIFY_SITE="https://agent-notify.netlify.app"
+export AGENT_API_TOKEN="your-netlify-AGENT_API_TOKEN"
+node src/index.js
+```
+
+Tools: `notify` (title, optional body/url/tag), `health`.
+
+Cursor skill: copy or symlink [`skills/agent-notify`](./skills/agent-notify) into `~/.cursor/skills/`. Details: [mcp/README.md](./mcp/README.md).
 
 ## Deploy on Netlify
 
@@ -119,6 +135,8 @@ The server always sends Declarative Web Push JSON. Dead endpoints (404/410) are 
 ## Layout
 
 ```
+mcp/                 Stdio MCP server (notify + health)
+skills/agent-notify/ Cursor skill for when/how to ping
 netlify/functions/   TypeScript Functions 2.0 handlers
 netlify/lib/         Blobs, VAPID, auth, rate limit
 public/sw.js         Push + offline shell
