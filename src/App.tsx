@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHint, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Link } from "react-router-dom";
 import {
   deleteSubscription,
   fetchHealth,
@@ -13,6 +14,7 @@ import {
   postTestPing,
   type HealthResponse,
 } from "@/lib/api";
+import { loadSecret, saveSecret } from "@/lib/secret";
 import {
   displayMode,
   isIosDevice,
@@ -26,8 +28,6 @@ import {
   subscribeToPush,
   unsubscribeFromPush,
 } from "@/lib/push-client";
-
-const SECRET_KEY = "agent-notify.owner-secret";
 
 type Activity = {
   at: string;
@@ -46,23 +46,6 @@ type UiState = {
   subscribed: boolean;
   endpointTail: string | null;
 };
-
-function loadSecret(): string {
-  try {
-    return localStorage.getItem(SECRET_KEY) ?? "";
-  } catch {
-    return "";
-  }
-}
-
-function saveSecret(secret: string): void {
-  try {
-    if (secret) localStorage.setItem(SECRET_KEY, secret);
-    else localStorage.removeItem(SECRET_KEY);
-  } catch {
-    // Ignore quota / private mode.
-  }
-}
 
 export default function App() {
   const [state, setState] = useState<UiState>({
@@ -199,6 +182,11 @@ export default function App() {
           <p className="mt-3 max-w-sm text-sm leading-6 text-mist/85">
             Add this site to the Home Screen, enable notifications, then let a single agent token send Web Push to you.
           </p>
+          <div className="mt-4">
+            <Button asChild variant="secondary" size="sm">
+              <Link to="/inbox">Open inbox</Link>
+            </Button>
+          </div>
         </div>
         <div className="rounded-full bg-signal/15 p-3 text-signal">
           <BellRing className="size-6" />
