@@ -90,6 +90,18 @@ describe("parseNotifyBody", () => {
     assert.equal(parsed.default_action?.message, "Custom box page");
   });
 
+  it("normalizes an optional topic", () => {
+    const parsed = parseNotifyBody({ title: "Ship", topic: " Deploys " });
+    assert.equal("error" in parsed, false);
+    if ("error" in parsed) return;
+    assert.equal(parsed.topic, "deploys");
+  });
+
+  it("rejects reserved topic names", () => {
+    const result = parseNotifyBody({ title: "Ship", topic: "*" });
+    assert.deepEqual(result, { error: "topic name '*' is reserved" });
+  });
+
   it("rejects unsafe bg values like url()", () => {
     const result = parseNotifyBody({
       title: "Bad bg",

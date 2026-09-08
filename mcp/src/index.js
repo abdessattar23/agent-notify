@@ -25,6 +25,11 @@ const TOOLS = [
           items: { type: "object" },
         },
         data: { type: "object" },
+        topic: {
+          type: "string",
+          maxLength: 64,
+          description: "Optional account-scoped topic. Omit to fan out to every device on the token's account.",
+        },
       },
     },
   },

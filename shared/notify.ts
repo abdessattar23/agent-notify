@@ -1,3 +1,5 @@
+import { normalizeTopicName } from "./topics.ts";
+
 export type ActionType = "open_app" | "link" | "inbox" | "show_box" | "copy";
 
 export type NotifyAction = {
@@ -20,6 +22,7 @@ export type NotifyInput = {
   body?: string;
   url?: string;
   tag?: string;
+  topic?: string;
   image?: string;
   badge_count?: number;
   default_action?: NotifyAction;
@@ -61,6 +64,7 @@ export type InboxItem = {
   body?: string;
   url?: string;
   tag?: string;
+  topic?: string;
   image?: string;
   badge_count?: number;
   default_action?: NotifyAction;
@@ -195,6 +199,16 @@ export function parseNotifyBody(raw: unknown): NotifyInput | { error: string } {
   const tag = optionalString(record.tag, "tag", TAG_MAX);
   if (typeof tag === "object") return tag;
 
+  let topic: string | undefined;
+  if (record.topic !== undefined && record.topic !== null && record.topic !== "") {
+    if (typeof record.topic !== "string") {
+      return { error: "topic must be a string" };
+    }
+    const normalized = normalizeTopicName(record.topic);
+    if (typeof normalized === "object") return normalized;
+    topic = normalized;
+  }
+
   const image = optionalString(record.image, "image", IMAGE_MAX);
   if (typeof image === "object") return image;
 
@@ -216,6 +230,7 @@ export function parseNotifyBody(raw: unknown): NotifyInput | { error: string } {
     ...(body ? { body } : {}),
     ...(url ? { url } : {}),
     ...(tag ? { tag } : {}),
+    ...(topic ? { topic } : {}),
     ...(image ? { image } : {}),
     ...(badge_count !== undefined ? { badge_count } : {}),
     ...(default_action ? { default_action } : {}),
@@ -251,6 +266,7 @@ export function toInboxItem(input: NotifyInput, id: string, createdAt = new Date
     ...(input.body ? { body: input.body } : {}),
     ...(input.url ? { url: input.url } : {}),
     ...(input.tag ? { tag: input.tag } : {}),
+    ...(input.topic ? { topic: input.topic } : {}),
     ...(input.image ? { image: input.image } : {}),
     ...(input.badge_count !== undefined ? { badge_count: input.badge_count } : {}),
     ...(input.default_action ? { default_action: input.default_action } : {}),

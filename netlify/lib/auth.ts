@@ -1,8 +1,21 @@
 import { createHash, timingSafeEqual } from "node:crypto";
+import { getAccount, hashToken, lookupTokenAccount, touchToken } from "./accounts.ts";
 import { getRuntimeEnv } from "./env.ts";
+import { resolveAppMode } from "./mode.ts";
+import { loadSession } from "./session.ts";
 
 export type AuthResult =
   | { ok: true }
+  | { ok: false; status: 401 | 503; error: string };
+
+export type AgentAuth =
+  | { ok: true; mode: "solo" }
+  | { ok: true; mode: "multi"; accountId: string }
+  | { ok: false; status: 401 | 503; error: string };
+
+export type OwnerAuth =
+  | { ok: true; mode: "solo" }
+  | { ok: true; mode: "multi"; accountId: string }
   | { ok: false; status: 401 | 503; error: string };
 
 export function bearerToken(req: Request): string | null {
@@ -42,4 +55,42 @@ export function secretsEqual(left: string, right: string): boolean {
   const leftHash = createHash("sha256").update(left).digest();
   const rightHash = createHash("sha256").update(right).digest();
   return timingSafeEqual(leftHash, rightHash);
+}
+
+export async function resolveAgentAuth(req: Request): Promise<AgentAuth> {
+  const mode = await resolveAppMode();
+  if (mode === "solo") {
+    const result = requireAgentToken(req);
+    if (!result.ok) return result;
+    return { ok: true, mode: "solo" };
+  }
+
+  const token = bearerToken(req);
+  if (!token) {
+    return { ok: false, status: 401, error: "unauthorized" };
+  }
+  const accountId = await lookupTokenAccount(hashToken(token));
+  if (!accountId) {
+    return { ok: false, status: 401, error: "unauthorized" };
+  }
+  const account = await getAccount(accountId);
+  if (!account) {
+    return { ok: false, status: 401, error: "unauthorized" };
+  }
+  await touchToken(accountId, hashToken(token)).catch(() => undefined);
+  return { ok: true, mode: "multi", accountId };
+}
+
+export async function requireAccountAccess(req: Request): Promise<OwnerAuth> {
+  const mode = await resolveAppMode();
+  if (mode === "solo") {
+    const owner = requireOwnerAccess(req);
+    if (!owner.ok) return owner;
+    return { ok: true, mode: "solo" };
+  }
+  const session = await loadSession(req);
+  if (!session) {
+    return { ok: false, status: 401, error: "session_required" };
+  }
+  return { ok: true, mode: "multi", accountId: session.accountId };
 }

@@ -64,6 +64,7 @@ export default function InboxDetailPage() {
           <CardHint className="mt-3">
             {new Date(item.createdAt).toLocaleString()}
             {item.tag ? ` · tag ${item.tag}` : ""}
+            {item.topic ? ` · topic ${item.topic}` : ""}
           </CardHint>
           {item.image ? (
             <img src={item.image} alt="" className="mt-4 max-h-64 w-full rounded-2xl object-cover" />

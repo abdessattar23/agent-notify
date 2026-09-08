@@ -10,13 +10,15 @@ Ping the owner with a user-visible Web Push on their Home Screen PWA.
 ## Setup
 
 - AGENT_NOTIFY_SITE — e.g. https://agent-notify.netlify.app
-- AGENT_API_TOKEN — bearer token from Netlify env
+- AGENT_API_TOKEN — bearer token from Netlify env (solo) or a per-account token from the Tokens page
 
 Or use mcp/ with the same env vars.
 
 ## Notify
 
-POST $AGENT_NOTIFY_SITE/v1/notify with JSON title/body/default_action/actions/data.
+POST $AGENT_NOTIFY_SITE/v1/notify with JSON title/body/default_action/actions/data and optional topic.
+
+On multi-account deploys the token selects the account. Omit topic to fan out to every device on that account. `topic: "deploys"` reaches devices subscribed to that topic or devices with all-topics `*`. Alias: POST /v1/t/{topic}.
 
 Action types: open_app, link, inbox, show_box, copy (max 3 buttons).
 Prefer show_box instead of inventing deep links.
