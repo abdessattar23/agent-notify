@@ -7,8 +7,10 @@ import {
   type NotifyInput,
 } from "../../shared/notify.ts";
 import type { StoredSubscription } from "../../shared/subscription.ts";
+import { putAccountInboxItem, deleteDevice, devicesForTopic, putTopic } from "./accounts.ts";
 import { getRuntimeEnv, vapidConfigured } from "./env.ts";
 import { deleteSubscription, listSubscriptions, putInboxItem } from "./store.ts";
+import type { DeviceRecord } from "../../shared/account.ts";
 
 export type SendSummary = {
   delivered: number;
@@ -43,14 +45,60 @@ export async function sendToAllSubscriptions(
   }
   const payload = JSON.stringify(buildDeclarativePayload(input, origin, inboxId));
   const subscriptions = await listSubscriptions();
-  const summary: SendSummary = { delivered: 0, failed: 0, pruned: 0, errors: [], id: inboxId };
+  return deliverPayload(
+    payload,
+    inboxId,
+    subscriptions.map(({ key, value }) => ({
+      key,
+      endpoint: value.endpoint,
+      keys: value.keys,
+    })),
+    async (endpoint) => {
+      await deleteSubscription(endpoint);
+    },
+  );
+}
 
-  for (const { key, value } of subscriptions) {
+export async function sendToAccount(
+  accountId: string,
+  input: NotifyInput,
+  origin: string,
+  options?: { persistInbox?: boolean; inboxId?: string; topic?: string },
+): Promise<SendSummary> {
+  applyVapid();
+  const inboxId = options?.inboxId ?? createInboxId();
+  const topic = options?.topic ?? input.topic;
+  if (topic) {
+    await putTopic(accountId, topic);
+  }
+  if (options?.persistInbox !== false) {
+    await putAccountInboxItem(accountId, toInboxItem({ ...input, ...(topic ? { topic } : {}) }, inboxId));
+  }
+  const payload = JSON.stringify(buildDeclarativePayload(input, origin, inboxId));
+  const devices = await devicesForTopic(accountId, topic);
+  return deliverPayload(payload, inboxId, devices.map(deviceTarget), async (endpoint) => {
+    const device = devices.find((row) => row.endpoint === endpoint);
+    if (device) await deleteDevice(accountId, device.id);
+  });
+}
+
+function deviceTarget(device: DeviceRecord): { key: string; endpoint: string; keys: DeviceRecord["keys"] } {
+  return { key: device.id, endpoint: device.endpoint, keys: device.keys };
+}
+
+async function deliverPayload(
+  payload: string,
+  inboxId: string,
+  targets: Array<{ key: string; endpoint: string; keys: { p256dh: string; auth: string } }>,
+  prune: (endpoint: string) => Promise<void>,
+): Promise<SendSummary> {
+  const summary: SendSummary = { delivered: 0, failed: 0, pruned: 0, errors: [], id: inboxId };
+  for (const target of targets) {
     try {
       await webpush.sendNotification(
         {
-          endpoint: value.endpoint,
-          keys: value.keys,
+          endpoint: target.endpoint,
+          keys: target.keys,
         },
         payload,
         {
@@ -63,15 +111,14 @@ export async function sendToAllSubscriptions(
     } catch (error) {
       const status = pushStatus(error);
       if (status !== null && isGonePushStatus(status)) {
-        await deleteSubscription(value.endpoint);
+        if (target.endpoint) await prune(target.endpoint);
         summary.pruned += 1;
         continue;
       }
       summary.failed += 1;
-      summary.errors.push(`${key}: ${errorMessage(error)}`);
+      summary.errors.push(`${target.key}: ${errorMessage(error)}`);
     }
   }
-
   return summary;
 }
 

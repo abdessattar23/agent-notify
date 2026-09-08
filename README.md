@@ -4,7 +4,7 @@ Personal [Netlify](https://www.netlify.com/) PWA + API. Authenticated AI agents 
 
 **Live:** https://agent-notify.netlify.app
 
-This is a single-user MVP. Hosting is **Netlify static files + Netlify Functions**. Subscriptions and rate-limit/token usage live in **Netlify Blobs**. There are no Cloudflare Workers.
+This started as a single-user MVP and now optionally supports **multiple accounts** with per-account devices, agent tokens, and topics. Hosting is **Netlify static files + Netlify Functions**. Subscriptions and rate-limit/token usage live in **Netlify Blobs**. There are no Cloudflare Workers. Solo deploys that only set `AGENT_API_TOKEN` keep working.
 
 On iPhone, **Add to Home Screen is required**. Safari tabs cannot receive Web Push. Permission is requested only from a user gesture. Payloads use [Declarative Web Push](https://webkit.org/blog/16535/meet-declarative-web-push/) (`web_push: 8030`) so iOS can show a notification even if the service worker was evicted. Silent push is never sent (`userVisibleOnly` + `silent: false`).
 
@@ -34,10 +34,14 @@ If `.env` already exists, the command prints keys instead of overwriting.
 | `VAPID_PUBLIC_KEY` | yes | From `web-push` / `npm run generate:vapid` |
 | `VAPID_PRIVATE_KEY` | yes | Keep secret |
 | `VAPID_SUBJECT` | yes | `mailto:you@example.com` or `https://your-site.netlify.app` |
-| `AGENT_API_TOKEN` | yes | Long random bearer token for agents |
-| `OWNER_SETUP_SECRET` | no | If set, the PWA must send it as `X-Owner-Secret` to subscribe or ping |
+| `AGENT_API_TOKEN` | solo: yes | Long random bearer token for agents. Unused for new tokens after a site is claimed. |
+| `OWNER_SETUP_SECRET` | no | Solo only. If set, the PWA must send it as `X-Owner-Secret` to subscribe or ping |
 | `SITE_URL` | no | Defaults to Netlify `URL` |
-| `RATE_LIMIT_PER_HOUR` | no | Default `30` |
+| `RATE_LIMIT_PER_HOUR` | no | Default `30` (per site in solo, per account in multi) |
+| `MULTI_ACCOUNT` | no | Set `1` / `true` to enable signup and per-account tokens |
+| `SESSION_SECRET` | multi: yes | HMAC secret for the HTTP-only session cookie |
+| `INVITE_CODE` | no | If set, signup requires this invite (email optional for one invite-only account) |
+| `SIGNUP_RATE_LIMIT_PER_HOUR` | no | Default `5` per client IP |
 
 4. Build settings are in `netlify.toml`:
 
@@ -73,7 +77,27 @@ curl -sS -X POST "$SITE/v1/notify" \
   -d '{"title":"Build failed","body":"CI on main is red","url":"/"}'
 ```
 
-Agents should treat this as a fire-and-forget user-visible ping. See [AGENT.md](./AGENT.md) for the contract.
+On a multi-account deploy, create a token on **Tokens** and optionally add `"topic":"deploys"`. Alias: `POST /v1/t/deploys`. Agents should treat this as a fire-and-forget user-visible ping. See [AGENT.md](./AGENT.md) for the contract.
+
+## Multi-account
+
+Leave `MULTI_ACCOUNT` unset for today’s solo behavior (`AGENT_API_TOKEN` + global subscriptions).
+
+To host more than one person on one Netlify site:
+
+1. Set `MULTI_ACCOUNT=1` and a long random `SESSION_SECRET`.
+2. Optionally set `INVITE_CODE` so signup is gated.
+3. Open the PWA, create an account, enable notifications.
+4. If this site already had solo subscriptions, tap **Claim this site** to attach them as devices and map `AGENT_API_TOKEN` onto that account.
+5. Create agent tokens on `/tokens`. A token for account A cannot notify account B.
+
+Topic rules:
+
+- No `topic` on notify → every device on that account.
+- `topic: "deploys"` → devices with all-topics `*` (the default) or an explicit `deploys` filter.
+- Topics are account-scoped and created lazily.
+
+Auth is email + password (or invite + password). Sessions are HTTP-only signed cookies. There is no magic-link email provider in v1.
 
 ## Local development
 
@@ -101,11 +125,17 @@ Chrome on localhost can subscribe and receive push. An iPhone still needs the Ne
 | --- | --- | --- |
 | `GET` | `/api/health` | none | Liveness + config flags |
 | `GET` | `/api/vapid-public-key` | none | Public VAPID key for `PushManager.subscribe` |
-| `POST` | `/api/subscribe` | `X-Owner-Secret` if configured | Store a push subscription in Blobs |
-| `DELETE` | `/api/subscribe` | `X-Owner-Secret` if configured | Remove a subscription |
-| `POST` | `/api/ping` | `X-Owner-Secret` if configured | Owner test push |
-| `GET` | `/api/inbox` / `/api/inbox/:id` | `X-Owner-Secret` if configured | Owner inbox |
-| `POST` | `/v1/notify` | `Authorization: Bearer $AGENT_API_TOKEN` | Agent push (rate limited) |
+| `POST` | `/api/signup` `/api/login` `/api/logout` | session cookie | Multi-account auth |
+| `GET` | `/api/me` | session (or owner secret in solo) | Current account |
+| `POST` | `/api/claim` | session | One-shot migrate of legacy solo subs |
+| `GET/POST/PATCH/DELETE` | `/api/devices` | session | Device list + topic filters |
+| `GET/POST/DELETE` | `/api/tokens` | session | Per-account agent tokens |
+| `POST` | `/api/subscribe` | session in multi; `X-Owner-Secret` in solo | Store a push subscription |
+| `DELETE` | `/api/subscribe` | session in multi; `X-Owner-Secret` in solo | Remove a subscription |
+| `POST` | `/api/ping` | session in multi; `X-Owner-Secret` in solo | Owner test push |
+| `GET` | `/api/inbox` / `/api/inbox/:id` | session in multi; `X-Owner-Secret` in solo | Inbox (`?topic=` filter) |
+| `POST` | `/v1/notify` | account or solo bearer token | Agent push (rate limited) |
+| `POST` | `/v1/t/:topic` | same | Notify a named topic |
 
 Notify body (rich tap-actions):
 
@@ -131,11 +161,12 @@ Notify body (rich tap-actions):
     { "type": "copy", "title": "Copy", "text": "…" },
     { "type": "link", "title": "Open", "url": "https://…" }
   ],
-  "data": { "agent": "optional" }
+  "data": { "agent": "optional" },
+  "topic": "optional-account-topic"
 }
 ```
 
-Action types: `open_app` | `link` | `inbox` | `show_box` | `copy` (max 3 buttons). For `show_box`, optional `emoji` / `subtitle` / `message` / `bg` / `color` render a custom styled page; omit them for the default computer-preview instructions. `bg` and `color` are sanitized CSS (no `url()` / `expression` / `;`). Taps land on `/go/*` or `/inbox/:id`. The server always sends Declarative Web Push JSON (`web_push: 8030`, `mutable: true`, `silent: false`) with `navigate` + `notification.actions`. Dead endpoints (404/410) are deleted from Blobs. Each notify is stored for `GET /api/inbox`.
+Action types: `open_app` | `link` | `inbox` | `show_box` | `copy` (max 3 buttons). For `show_box`, optional `emoji` / `subtitle` / `message` / `bg` / `color` render a custom styled page; omit them for the default computer-preview instructions. `bg` and `color` are sanitized CSS (no `url()` / `expression` / `;`). Taps land on `/go/*` or `/inbox/:id`. The server always sends Declarative Web Push JSON (`web_push: 8030`, `mutable: true`, `silent: false`) with `navigate` + `notification.actions`. Dead endpoints (404/410) are deleted from Blobs. Each notify is stored for `GET /api/inbox`. In multi-account mode, Blobs keys are prefixed `accounts/{accountId}/…`.
 
 ## Layout
 
@@ -143,7 +174,7 @@ Action types: `open_app` | `link` | `inbox` | `show_box` | `copy` (max 3 buttons
 netlify/functions/   TypeScript Functions 2.0 handlers
 netlify/lib/         Blobs, VAPID, auth, rate limit, inbox
 public/sw.js         Push + action clicks + offline shell
-src/                 PWA UI (home, inbox, /go router)
+src/                 PWA UI (home, auth, devices, tokens, inbox, /go router)
 shared/              Payload validation used by Functions
 mcp/                 MCP server for notify
 skills/agent-notify/ Agent skill docs

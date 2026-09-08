@@ -1,4 +1,6 @@
-import { tokensStore } from "./store.ts";
+import { createHash } from "node:crypto";
+import { rateLimitStoreKey } from "./accounts.ts";
+import { namedStore, tokensStore, type BlobStore } from "./store.ts";
 
 export type RateLimitDecision =
   | { ok: true; remaining: number; limit: number; resetEpochSec: number }
@@ -23,10 +25,12 @@ export function nextCount(existing: WindowRecord | null, windowId: string): numb
   return existing.count + 1;
 }
 
-export async function consumeAgentRateLimit(limit: number): Promise<RateLimitDecision> {
+async function consumeWindow(
+  store: BlobStore,
+  key: string,
+  limit: number,
+): Promise<RateLimitDecision> {
   const { id, resetEpochSec } = hourWindow();
-  const store = tokensStore();
-  const key = "agent-hourly";
   const existing = await store.getJSON<WindowRecord>(key);
   const count = nextCount(existing, id);
   if (count > limit) {
@@ -34,6 +38,21 @@ export async function consumeAgentRateLimit(limit: number): Promise<RateLimitDec
   }
   await store.setJSON(key, { count, window: id, lastUsedAt: new Date().toISOString() });
   return { ok: true, remaining: Math.max(0, limit - count), limit, resetEpochSec };
+}
+
+export async function consumeAgentRateLimit(
+  limit: number,
+  accountId?: string,
+): Promise<RateLimitDecision> {
+  if (accountId) {
+    return consumeWindow(namedStore("accounts"), rateLimitStoreKey(accountId), limit);
+  }
+  return consumeWindow(tokensStore(), "agent-hourly", limit);
+}
+
+export async function consumeSignupRateLimit(limit: number, ip: string): Promise<RateLimitDecision> {
+  const hashed = createHash("sha256").update(ip).digest("hex").slice(0, 16);
+  return consumeWindow(tokensStore(), `signup-hourly/${hashed}`, limit);
 }
 
 export function rateLimitHeaders(decision: RateLimitDecision): HeadersInit {

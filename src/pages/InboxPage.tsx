@@ -1,16 +1,21 @@
 import { ArrowLeft, Inbox, LoaderCircle } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import { AccountNav } from "@/components/Nav";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardHint, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { fetchInbox, type InboxItem } from "@/lib/api";
+import { fetchHealth, fetchInbox, fetchMe, type InboxItem, type MeResponse } from "@/lib/api";
 import { loadSecret, saveSecret } from "@/lib/secret";
 
 export default function InboxPage() {
+  const [params, setParams] = useSearchParams();
+  const topic = params.get("topic") ?? "";
   const [secret, setSecret] = useState(loadSecret);
   const [items, setItems] = useState<InboxItem[]>([]);
+  const [me, setMe] = useState<MeResponse | null>(null);
+  const [multiAccount, setMultiAccount] = useState(false);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -20,9 +25,15 @@ export default function InboxPage() {
       setBusy(true);
       setError(null);
       try {
+        const health = await fetchHealth();
+        const nextMe = health.multiAccount ? await fetchMe() : null;
         saveSecret(secret);
-        const next = await fetchInbox(secret);
-        if (!cancelled) setItems(next);
+        const next = await fetchInbox(secret, 50, topic || undefined);
+        if (!cancelled) {
+          setMultiAccount(Boolean(health.multiAccount));
+          setMe(nextMe);
+          setItems(next);
+        }
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "Could not load inbox");
@@ -34,10 +45,11 @@ export default function InboxPage() {
     return () => {
       cancelled = true;
     };
-  }, [secret]);
+  }, [secret, topic]);
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-xl flex-col gap-4 px-4 py-6 pb-16 sm:py-10">
+      {multiAccount && me?.account ? <AccountNav email={me.account.email} /> : null}
       <header className="flex items-center justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-[0.22em] text-signal">Inbox</p>
@@ -51,19 +63,45 @@ export default function InboxPage() {
         </Button>
       </header>
 
-      <Card>
-        <CardTitle>Owner secret</CardTitle>
-        <CardHint>Required when OWNER_SETUP_SECRET is set on the deploy.</CardHint>
-        <div className="mt-4">
-          <Input
-            type="password"
-            autoComplete="current-password"
-            placeholder="OWNER_SETUP_SECRET"
-            value={secret}
-            onChange={(event) => setSecret(event.target.value)}
-          />
-        </div>
-      </Card>
+      {multiAccount ? (
+        <Card>
+          <CardTitle>Topic filter</CardTitle>
+          <CardHint>Inbox is per account. Use ?topic= or pick one below.</CardHint>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant={topic ? "secondary" : "default"}
+              onClick={() => setParams({})}
+            >
+              All
+            </Button>
+            {(me?.topics ?? []).map((name) => (
+              <Button
+                key={name}
+                size="sm"
+                variant={topic === name ? "default" : "secondary"}
+                onClick={() => setParams({ topic: name })}
+              >
+                {name}
+              </Button>
+            ))}
+          </div>
+        </Card>
+      ) : (
+        <Card>
+          <CardTitle>Owner secret</CardTitle>
+          <CardHint>Required when OWNER_SETUP_SECRET is set on the deploy.</CardHint>
+          <div className="mt-4">
+            <Input
+              type="password"
+              autoComplete="current-password"
+              placeholder="OWNER_SETUP_SECRET"
+              value={secret}
+              onChange={(event) => setSecret(event.target.value)}
+            />
+          </div>
+        </Card>
+      )}
 
       {error ? <Alert role="alert">{error}</Alert> : null}
 
@@ -89,6 +127,9 @@ export default function InboxPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="font-medium text-foam">{item.title}</p>
+                      {item.topic ? (
+                        <p className="mt-1 text-xs uppercase tracking-wide text-signal/80">{item.topic}</p>
+                      ) : null}
                       {item.body ? <p className="mt-1 text-sm text-mist/80 line-clamp-2">{item.body}</p> : null}
                     </div>
                     <time className="shrink-0 text-xs text-mist/50">

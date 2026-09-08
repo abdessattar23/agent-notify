@@ -8,7 +8,7 @@ export type BlobStore = {
   getJSON: <T>(key: string) => Promise<T | null>;
   setJSON: (key: string, value: unknown) => Promise<void>;
   delete: (key: string) => Promise<void>;
-  listKeys: () => Promise<string[]>;
+  listKeys: (prefix?: string) => Promise<string[]>;
 };
 
 const SUBSCRIPTIONS = "subscriptions";
@@ -27,6 +27,10 @@ export function tokensStore(): BlobStore {
 
 export function inboxStore(): BlobStore {
   return openStore(INBOX);
+}
+
+export function namedStore(name: string): BlobStore {
+  return openStore(name);
 }
 
 export async function putSubscription(subscription: StoredSubscription): Promise<string> {
@@ -121,7 +125,7 @@ function isNetlifyRuntime(): boolean {
 }
 
 function wrapNetlifyStore(name: string): BlobStore {
-  const store = getStore(name);
+  const store = getStore({ name, consistency: "strong" });
   return {
     async getJSON<T>(key: string) {
       const value = await store.get(key, { type: "json" });
@@ -133,15 +137,19 @@ function wrapNetlifyStore(name: string): BlobStore {
     async delete(key) {
       await store.delete(key);
     },
-    async listKeys() {
-      const { blobs } = await store.list();
+    async listKeys(prefix) {
+      const { blobs } = await store.list(prefix ? { prefix } : undefined);
       return blobs.map((blob) => blob.key);
     },
   };
 }
 
+function blobRoot(): string {
+  return process.env.BLOB_STORE_DIR || join(process.cwd(), ".data", "blobs");
+}
+
 function createFileStore(name: string): BlobStore {
-  const dir = join(process.cwd(), ".data", "blobs", name);
+  const dir = join(blobRoot(), name);
   return {
     async getJSON<T>(key: string) {
       try {
@@ -158,10 +166,11 @@ function createFileStore(name: string): BlobStore {
     async delete(key) {
       await rm(join(dir, encodeURIComponent(key)), { force: true });
     },
-    async listKeys() {
+    async listKeys(prefix) {
       try {
         const files = await readdir(dir);
-        return files.map((file) => decodeURIComponent(file));
+        const keys = files.map((file) => decodeURIComponent(file));
+        return prefix ? keys.filter((key) => key.startsWith(prefix)) : keys;
       } catch {
         return [];
       }

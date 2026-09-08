@@ -1,8 +1,8 @@
 import type { Config, Context } from "@netlify/functions";
-import { requireOwnerAccess } from "../lib/auth.ts";
+import { requireAccountAccess } from "../lib/auth.ts";
 import { getRuntimeEnv, resolveSiteUrl, vapidConfigured } from "../lib/env.ts";
 import { json, methodNotAllowed, optionsResponse } from "../lib/http.ts";
-import { sendToAllSubscriptions } from "../lib/push.ts";
+import { sendToAccount, sendToAllSubscriptions } from "../lib/push.ts";
 
 export default async function handler(req: Request, _context: Context): Promise<Response> {
   switch (req.method) {
@@ -21,22 +21,22 @@ async function ping(req: Request): Promise<Response> {
     return json({ ok: false, error: "vapid_unconfigured" }, 503);
   }
 
-  const auth = requireOwnerAccess(req);
+  const auth = await requireAccountAccess(req);
   if (!auth.ok) {
     return json({ ok: false, error: auth.error }, auth.status);
   }
 
   const origin = resolveSiteUrl(req, env);
-  const summary = await sendToAllSubscriptions(
-    {
-      title: "Agent Notify test ping",
-      body: "Push is working. Your agents can reach this iPhone.",
-      url: "/",
-      tag: "agent-notify-test",
-    },
-    origin,
-  );
-
+  const payload = {
+    title: "Agent Notify test ping",
+    body: "Push is working. Your agents can reach this iPhone.",
+    url: "/",
+    tag: "agent-notify-test",
+  };
+  const summary =
+    auth.mode === "multi"
+      ? await sendToAccount(auth.accountId, payload, origin)
+      : await sendToAllSubscriptions(payload, origin);
   if (summary.delivered === 0 && summary.failed === 0 && summary.pruned === 0) {
     return json({ ok: false, error: "no_subscriptions", ...summary }, 409);
   }

@@ -2,8 +2,11 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import App from "./App.tsx";
+import AuthPage from "./pages/AuthPage.tsx";
+import DevicesPage from "./pages/DevicesPage.tsx";
 import InboxDetailPage from "./pages/InboxDetailPage.tsx";
 import InboxPage from "./pages/InboxPage.tsx";
+import TokensPage from "./pages/TokensPage.tsx";
 import { GoAppPage, GoBoxPage, GoCopyPage, GoLinkPage } from "./pages/GoPages.tsx";
 import "./index.css";
 
@@ -17,6 +20,10 @@ createRoot(root).render(
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<App />} />
+        <Route path="/login" element={<AuthPage />} />
+        <Route path="/signup" element={<AuthPage />} />
+        <Route path="/devices" element={<DevicesPage />} />
+        <Route path="/tokens" element={<TokensPage />} />
         <Route path="/inbox" element={<InboxPage />} />
         <Route path="/inbox/:id" element={<InboxDetailPage />} />
         <Route path="/go/app" element={<GoAppPage />} />

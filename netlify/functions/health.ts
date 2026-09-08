@@ -1,6 +1,8 @@
 import type { Config, Context } from "@netlify/functions";
 import { getRuntimeEnv, vapidConfigured } from "../lib/env.ts";
 import { json, methodNotAllowed, optionsResponse } from "../lib/http.ts";
+import { isLegacyClaimAvailable } from "../lib/claim.ts";
+import { resolveAppMode } from "../lib/mode.ts";
 import { listSubscriptions } from "../lib/store.ts";
 
 export default async function handler(req: Request, _context: Context): Promise<Response> {
@@ -23,6 +25,14 @@ async function health(): Promise<Response> {
     subscriptionCount = 0;
   }
 
+  const mode = await resolveAppMode();
+  let legacyClaimAvailable = false;
+  try {
+    legacyClaimAvailable = mode === "multi" && (await isLegacyClaimAvailable());
+  } catch {
+    legacyClaimAvailable = false;
+  }
+
   return json({
     ok: true,
     service: "agent-notify",
@@ -30,6 +40,10 @@ async function health(): Promise<Response> {
     agentTokenConfigured: Boolean(env.agentApiToken),
     ownerSetupRequired: Boolean(env.ownerSetupSecret),
     subscriptionCount,
+    multiAccount: mode === "multi",
+    inviteRequired: Boolean(env.inviteCode),
+    sessionSecretConfigured: Boolean(env.sessionSecret),
+    legacyClaimAvailable,
   });
 }
 

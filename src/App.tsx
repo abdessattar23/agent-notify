@@ -1,5 +1,6 @@
 import { BellRing, Home, LoaderCircle, Smartphone, Wifi } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { AccountNav } from "@/components/Nav";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -7,12 +8,15 @@ import { Card, CardHint, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Link } from "react-router-dom";
 import {
+  claimLegacy,
   deleteSubscription,
   fetchHealth,
+  fetchMe,
   fetchVapidPublicKey,
   postSubscription,
   postTestPing,
   type HealthResponse,
+  type MeResponse,
 } from "@/lib/api";
 import { loadSecret, saveSecret } from "@/lib/secret";
 import {
@@ -40,6 +44,7 @@ type UiState = {
   busy: boolean;
   error: string | null;
   health: HealthResponse | null;
+  me: MeResponse | null;
   permission: NotificationPermission | "unsupported";
   standalone: boolean;
   ios: boolean;
@@ -53,6 +58,7 @@ export default function App() {
     busy: false,
     error: null,
     health: null,
+    me: null,
     permission: "default",
     standalone: false,
     ios: false,
@@ -67,14 +73,16 @@ export default function App() {
   }, []);
 
   const refresh = useCallback(async () => {
-    const [health, subscription] = await Promise.all([
+    const [health, subscription, me] = await Promise.all([
       fetchHealth(),
       currentSubscription().catch(() => null),
+      fetchMe().catch(() => null),
     ]);
     setState((current) => ({
       ...current,
       ready: true,
       health,
+      me,
       permission: notificationPermission(),
       standalone: isStandalone(),
       ios: isIosDevice(),
@@ -105,11 +113,13 @@ export default function App() {
   }, [refresh]);
 
   const iosNeedsInstall = state.ios && !state.standalone;
+  const needsAccount = Boolean(state.health?.multiAccount && !state.me?.account);
   const canEnable = useMemo(() => {
     if (!pushSupported()) return false;
     if (iosNeedsInstall) return false;
+    if (needsAccount) return false;
     return true;
-  }, [iosNeedsInstall]);
+  }, [iosNeedsInstall, needsAccount]);
 
   async function enableNotifications() {
     setState((current) => ({ ...current, busy: true, error: null }));
@@ -180,12 +190,24 @@ export default function App() {
           <p className="text-xs uppercase tracking-[0.22em] text-signal">Agent Notify</p>
           <h1 className="mt-2 font-serif text-4xl leading-none text-foam">Your iPhone, pinged by agents.</h1>
           <p className="mt-3 max-w-sm text-sm leading-6 text-mist/85">
-            Add this site to the Home Screen, enable notifications, then let a single agent token send Web Push to you.
+            {state.health?.multiAccount
+              ? "Add this site to the Home Screen, enable notifications, then send per-account agent tokens."
+              : "Add this site to the Home Screen, enable notifications, then let a single agent token send Web Push to you."}
           </p>
-          <div className="mt-4">
+          <div className="mt-4 flex flex-wrap gap-2">
             <Button asChild variant="secondary" size="sm">
               <Link to="/inbox">Open inbox</Link>
             </Button>
+            {state.health?.multiAccount && state.me?.account ? (
+              <>
+                <Button asChild variant="secondary" size="sm">
+                  <Link to="/devices">Devices</Link>
+                </Button>
+                <Button asChild variant="secondary" size="sm">
+                  <Link to="/tokens">Tokens</Link>
+                </Button>
+              </>
+            ) : null}
           </div>
         </div>
         <div className="rounded-full bg-signal/15 p-3 text-signal">
@@ -200,7 +222,65 @@ export default function App() {
         </Card>
       ) : null}
 
+      {state.health?.multiAccount && state.me?.account ? (
+        <AccountNav email={state.me.account.email} />
+      ) : null}
+
       {state.error ? <Alert role="alert">{humanError(state.error)}</Alert> : null}
+
+      {state.health?.multiAccount && !state.me?.account ? (
+        <Card>
+          <CardTitle>Account required</CardTitle>
+          <CardHint>
+            This deploy has multi-account on. Sign in to bind this device and create agent tokens.
+          </CardHint>
+          <div className="mt-4 flex gap-3">
+            <Button asChild>
+              <Link to="/login">Sign in</Link>
+            </Button>
+            <Button asChild variant="secondary">
+              <Link to="/signup">Create account</Link>
+            </Button>
+          </div>
+        </Card>
+      ) : null}
+
+      {state.me?.legacyClaimAvailable ? (
+        <Card>
+          <CardTitle>Claim this site</CardTitle>
+          <CardHint>
+            Existing solo subscriptions can be attached as devices on this account. The legacy
+            AGENT_API_TOKEN becomes one of your account tokens.
+          </CardHint>
+          <div className="mt-4">
+            <Button
+              variant="secondary"
+              disabled={state.busy}
+              onClick={() => {
+                void (async () => {
+                  setState((current) => ({ ...current, busy: true, error: null }));
+                  try {
+                    const result = await claimLegacy();
+                    log(
+                      `Claimed ${result.devices} device(s)${result.mappedLegacyToken ? " and mapped the legacy token" : ""}.`,
+                      "good",
+                    );
+                    await refresh();
+                  } catch (error) {
+                    const message = error instanceof Error ? error.message : "Claim failed";
+                    setState((current) => ({ ...current, error: message }));
+                    log(message, "bad");
+                  } finally {
+                    setState((current) => ({ ...current, busy: false }));
+                  }
+                })();
+              }}
+            >
+              Claim existing devices
+            </Button>
+          </div>
+        </Card>
+      ) : null}
 
       <Card>
         <CardTitle>Status</CardTitle>
@@ -234,7 +314,7 @@ export default function App() {
 
       {iosNeedsInstall ? <InstallCard /> : null}
 
-      {state.health?.ownerSetupRequired ? (
+      {state.health?.ownerSetupRequired && !state.health.multiAccount ? (
         <Card>
           <CardTitle>Owner secret</CardTitle>
           <CardHint>
@@ -282,11 +362,18 @@ export default function App() {
       <Card>
         <CardTitle>For agents</CardTitle>
         <CardHint>
-          Authenticated agents POST to <code className="text-signal">/v1/notify</code> with the bearer token from
-          Netlify env. See AGENT.md.
+          Authenticated agents POST to <code className="text-signal">/v1/notify</code>
+          {state.health?.multiAccount
+            ? " with a per-account bearer token. Optional topic field. See Tokens."
+            : " with the bearer token from Netlify env. See AGENT.md."}
         </CardHint>
         <pre className="mt-4 overflow-x-auto rounded-2xl bg-ink px-4 py-3 text-xs leading-6 text-mist">
-{`curl -X POST "$SITE/v1/notify" \\
+{state.health?.multiAccount
+  ? `curl -X POST "$SITE/v1/notify" \\
+  -H "Authorization: Bearer $ACCOUNT_TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '{"title":"Build failed","body":"CI on main","topic":"deploys"}'`
+  : `curl -X POST "$SITE/v1/notify" \\
   -H "Authorization: Bearer $AGENT_API_TOKEN" \\
   -H "Content-Type: application/json" \\
   -d '{"title":"Build failed","body":"CI on main","url":"/"}'`}
@@ -368,6 +455,8 @@ function humanError(error: string): string {
       return "No push subscription is stored yet. Enable notifications first.";
     case "unauthorized":
       return "The owner secret or agent token was rejected.";
+    case "session_required":
+      return "Sign in to manage devices and inbox on this multi-account deploy.";
     default:
       return error;
   }

@@ -6,6 +6,10 @@ export type RuntimeEnv = {
   ownerSetupSecret: string | null;
   siteUrl: string;
   rateLimitPerHour: number;
+  multiAccount: boolean;
+  sessionSecret: string | null;
+  inviteCode: string | null;
+  signupRateLimitPerHour: number;
 };
 
 let cached: RuntimeEnv | null = null;
@@ -23,6 +27,8 @@ export function resetRuntimeEnvCache(): void {
 export function readRuntimeEnv(): RuntimeEnv {
   const rateLimitRaw = process.env.RATE_LIMIT_PER_HOUR ?? "30";
   const rateLimitPerHour = Number.parseInt(rateLimitRaw, 10);
+  const signupLimitRaw = process.env.SIGNUP_RATE_LIMIT_PER_HOUR ?? "5";
+  const signupRateLimitPerHour = Number.parseInt(signupLimitRaw, 10);
   return {
     vapidPublicKey: (process.env.VAPID_PUBLIC_KEY ?? "").trim(),
     vapidPrivateKey: (process.env.VAPID_PRIVATE_KEY ?? "").trim(),
@@ -34,7 +40,19 @@ export function readRuntimeEnv(): RuntimeEnv {
       "",
     ),
     rateLimitPerHour: Number.isFinite(rateLimitPerHour) && rateLimitPerHour > 0 ? rateLimitPerHour : 30,
+    multiAccount: parseBool(process.env.MULTI_ACCOUNT),
+    sessionSecret: emptyToNull(process.env.SESSION_SECRET),
+    inviteCode: emptyToNull(process.env.INVITE_CODE),
+    signupRateLimitPerHour:
+      Number.isFinite(signupRateLimitPerHour) && signupRateLimitPerHour > 0
+        ? signupRateLimitPerHour
+        : 5,
   };
+}
+
+function parseBool(value: string | undefined): boolean {
+  const normalized = value?.trim().toLowerCase();
+  return normalized === "1" || normalized === "true" || normalized === "on" || normalized === "yes";
 }
 
 export function vapidConfigured(env: RuntimeEnv = getRuntimeEnv()): boolean {

@@ -1,6 +1,6 @@
 # Agent Notify — agent contract
 
-Use this document when an AI agent should ping the owner. This is a **single-user** inbox. Do not scrape the PWA. Do not send silent or empty pushes.
+Use this document when an AI agent should ping the owner. Solo deploys are a single-user inbox. Multi-account deploys scope tokens, devices, and inbox to one account. Do not scrape the PWA. Do not send silent or empty pushes.
 
 ## Endpoint
 
@@ -15,7 +15,7 @@ Authorization: Bearer $AGENT_API_TOKEN
 Content-Type: application/json
 ```
 
-The token is a Netlify environment variable. Never put it in the PWA, git, or a chat log. If the server returns `401` with `"unauthorized"` or `"agent_token_unconfigured"`, stop and tell the owner.
+On a solo deploy the token is the Netlify `AGENT_API_TOKEN`. On a multi-account deploy it is a per-account token from the Tokens page (or a legacy token mapped by **Claim this site**). Never put it in the PWA, git, or a chat log. If the server returns `401` with `"unauthorized"` or `"agent_token_unconfigured"`, stop and tell the owner.
 
 ## Body
 
@@ -56,7 +56,8 @@ The token is a Netlify environment variable. Never put it in the PWA, git, or a 
       "color": "optional"
     }
   ],
-  "data": { "any": "json object, serialized <= 8000 chars" }
+  "data": { "any": "json object, serialized <= 8000 chars" },
+  "topic": "optional account-scoped channel, e.g. deploys"
 }
 ```
 
@@ -72,7 +73,9 @@ Every rich tap is routed through the PWA:
 
 If `default_action` is omitted and `url` is set, the default tap is a `link`. Otherwise the default tap opens the stored inbox item.
 
-The server wraps this in Declarative Web Push (`web_push: 8030`, `mutable: true`, `silent: false`) with `navigate`, optional `image` / `app_badge`, and `notification.actions` navigate URLs. Each notify is persisted for `GET /api/inbox`.
+The server wraps this in Declarative Web Push (`web_push: 8030`, `mutable: true`, `silent: false`) with `navigate`, optional `image` / `app_badge`, and `notification.actions` navigate URLs. Each notify is persisted for `GET /api/inbox` (per account when multi-account is on).
+
+Omit `topic` to notify every device on the token’s account (or every stored subscription in solo mode). A named topic reaches devices subscribed to that topic or devices with all-topics `*`. Alias: `POST {SITE}/v1/t/{topic}` with the same auth and body.
 
 ## Example
 
@@ -109,7 +112,7 @@ Success body includes `id` (inbox item id), `delivered`, `failed`, `pruned`, `er
 
 ## Rate limit
 
-Default **30 requests per UTC hour** per site (`RATE_LIMIT_PER_HOUR`).
+Default **30 requests per UTC hour** per site in solo mode, or **per account** when multi-account is on (`RATE_LIMIT_PER_HOUR`).
 
 ## When to notify
 

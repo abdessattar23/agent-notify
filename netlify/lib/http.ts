@@ -55,8 +55,17 @@ function corsHeaders(): Record<string, string> {
   return {
     "access-control-allow-origin": "*",
     "access-control-allow-headers": "Authorization, Content-Type, X-Owner-Secret",
-    "access-control-allow-methods": "GET, POST, DELETE, OPTIONS",
+    "access-control-allow-methods": "GET, POST, PATCH, DELETE, OPTIONS",
   };
+}
+
+export function clientIp(req: Request): string {
+  const forwarded = req.headers.get("x-forwarded-for");
+  if (forwarded) {
+    const first = forwarded.split(",")[0]?.trim();
+    if (first) return first;
+  }
+  return req.headers.get("x-nf-client-connection-ip") || "127.0.0.1";
 }
 
 function headerRecord(headers?: HeadersInit): Record<string, string> {

@@ -1,38 +1,69 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Context } from "@netlify/functions";
+import devices from "../netlify/functions/devices.ts";
 import health from "../netlify/functions/health.ts";
+import inbox from "../netlify/functions/inbox.ts";
 import notify from "../netlify/functions/notify.ts";
 import ping from "../netlify/functions/ping.ts";
+import session from "../netlify/functions/session.ts";
 import subscribe from "../netlify/functions/subscribe.ts";
+import tokens from "../netlify/functions/tokens.ts";
 import vapidPublicKey from "../netlify/functions/vapid-public-key.ts";
-import inbox from "../netlify/functions/inbox.ts";
 
 type Handler = (req: Request, context: Context) => Promise<Response> | Response;
 
-const routes = new Map<string, Handler>([
-  ["/api/health", health],
-  ["/api/vapid-public-key", vapidPublicKey],
-  ["/api/subscribe", subscribe],
-  ["/api/ping", ping],
-  ["/api/inbox", inbox],
-  ["/v1/notify", notify],
-]);
+type Route = {
+  pattern: RegExp;
+  keys: string[];
+  handler: Handler;
+};
+
+function compile(path: string, handler: Handler): Route {
+  const keys: string[] = [];
+  const source = path.replace(/:([A-Za-z_]+)/g, (_, key: string) => {
+    keys.push(key);
+    return "([^/]+)";
+  });
+  return { pattern: new RegExp(`^${source}$`), keys, handler };
+}
+
+const routes: Route[] = [
+  compile("/api/health", health),
+  compile("/api/vapid-public-key", vapidPublicKey),
+  compile("/api/subscribe", subscribe),
+  compile("/api/ping", ping),
+  compile("/api/inbox", inbox),
+  compile("/api/inbox/:id", inbox),
+  compile("/api/signup", session),
+  compile("/api/login", session),
+  compile("/api/logout", session),
+  compile("/api/me", session),
+  compile("/api/claim", session),
+  compile("/api/devices", devices),
+  compile("/api/devices/:id", devices),
+  compile("/api/tokens", tokens),
+  compile("/api/tokens/:id", tokens),
+  compile("/v1/notify", notify),
+  compile("/v1/t/:topic", notify),
+];
 
 export async function handleLocalApi(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
   const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "127.0.0.1"}`);
-  let handler = routes.get(url.pathname);
-  let params: Record<string, string> = {};
-  if (!handler) {
-    const inboxMatch = /^\/api\/inbox\/([^/]+)$/.exec(url.pathname);
-    if (inboxMatch) {
-      handler = inbox;
-      params = { id: decodeURIComponent(inboxMatch[1]) };
-    }
+  let match: { handler: Handler; params: Record<string, string> } | null = null;
+  for (const route of routes) {
+    const found = route.pattern.exec(url.pathname);
+    if (!found) continue;
+    const params: Record<string, string> = {};
+    route.keys.forEach((key, index) => {
+      params[key] = decodeURIComponent(found[index + 1] ?? "");
+    });
+    match = { handler: route.handler, params };
+    break;
   }
-  if (!handler) return false;
+  if (!match) return false;
 
   const request = await toRequest(req, url);
-  const response = await handler(request, localContext(params));
+  const response = await match.handler(request, localContext(match.params));
   await writeResponse(res, response);
   return true;
 }
