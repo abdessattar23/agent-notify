@@ -7,7 +7,7 @@ const TOOLS = [
   {
     name: "agent_notify",
     description:
-      "Send a user-visible Web Push to the owner via Agent Notify. Supports tap-actions: open_app, link, inbox, show_box, copy.",
+      "Send a user-visible Web Push to every subscribed Agent Notify device on the token (iPhone Home Screen, Android Chrome, desktop Chrome/Edge). Supports tap-actions: open_app, link, inbox, show_box, copy.",
     inputSchema: {
       type: "object",
       required: ["title"],

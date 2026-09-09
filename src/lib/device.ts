@@ -1,11 +1,22 @@
+import {
+  detectClientPlatform,
+  type ClientPlatform,
+} from "../../shared/platform.ts";
+
 export type DisplayMode = "standalone" | "browser";
+export type { ClientPlatform };
+
+export function currentClientPlatform(): ClientPlatform {
+  if (typeof navigator === "undefined") return "desktop";
+  return detectClientPlatform({
+    userAgent: navigator.userAgent,
+    platform: navigator.platform,
+    maxTouchPoints: navigator.maxTouchPoints,
+  });
+}
 
 export function isIosDevice(): boolean {
-  if (typeof navigator === "undefined") return false;
-  const ua = navigator.userAgent;
-  const iOS = /iPad|iPhone|iPod/.test(ua);
-  const iPadOs = navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
-  return iOS || iPadOs;
+  return currentClientPlatform() === "ios";
 }
 
 export function isStandalone(): boolean {

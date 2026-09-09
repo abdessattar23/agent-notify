@@ -14,6 +14,9 @@ import {
   type MeResponse,
   type PublicDevice,
 } from "@/lib/api";
+import { InstallHint } from "@/components/InstallHint";
+import { currentClientPlatform, isStandalone } from "@/lib/device";
+import { statusHint } from "../../shared/platform.ts";
 import { ALL_TOPICS, type TopicFilter } from "../../shared/topics.ts";
 
 export default function DevicesPage() {
@@ -66,16 +69,21 @@ export default function DevicesPage() {
           This account
         </CardTitle>
         <CardHint>
-          New devices default to all topics (<code className="text-signal">*</code>). A named topic
-          notify reaches <code className="text-signal">*</code> devices and devices that list that
-          topic. Enable push from the home page.
+          One token fans out to every device on this account (iPhone Home Screen, Android Chrome,
+          desktop Chrome/Edge) unless you filter topics. New devices default to all topics (
+          <code className="text-signal">*</code>). A named topic notify reaches{" "}
+          <code className="text-signal">*</code> devices and devices that list that topic.
         </CardHint>
+        <p className="mt-3 text-sm leading-6 text-mist/80">
+          {statusHint(currentClientPlatform(), isStandalone())} Enable push from the home page.
+        </p>
         <div className="mt-4">
           <Button asChild variant="secondary" size="sm">
             <Link to="/">Enable on this device</Link>
           </Button>
         </div>
       </Card>
+      <InstallHint platform={currentClientPlatform()} standalone={isStandalone()} />
       {busy ? (
         <Card className="flex items-center gap-3 text-mist">
           <LoaderCircle className="size-4 animate-spin" /> Loading devices…

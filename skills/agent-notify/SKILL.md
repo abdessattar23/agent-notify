@@ -1,11 +1,11 @@
 ---
 name: agent-notify
-description: Send rich Web Push notifications to the owner iPhone via Agent Notify (tap-actions, inbox, show_box).
+description: Send rich Web Push notifications to the owner's Agent Notify PWA (iPhone, Android Chrome, desktop Chromium; tap-actions, inbox, show_box).
 ---
 
 # Agent Notify
 
-Ping the owner with a user-visible Web Push on their Home Screen PWA.
+Ping the owner with a user-visible Web Push on their Agent Notify PWA (same app on iPhone Home Screen, Android Chrome, and desktop Chrome/Edge). One token fans out to every subscribed device on that account.
 
 ## Setup
 
@@ -18,7 +18,7 @@ Or use mcp/ with the same env vars.
 
 POST $AGENT_NOTIFY_SITE/v1/notify with JSON title/body/default_action/actions/data and optional topic.
 
-On multi-account deploys the token selects the account. Omit topic to fan out to every device on that account. `topic: "deploys"` reaches devices subscribed to that topic or devices with all-topics `*`. Alias: POST /v1/t/{topic}.
+On multi-account deploys the token selects the account. Omit topic to fan out to every device on that account (iPhone + Android + desktop). `topic: "deploys"` reaches devices subscribed to that topic or devices with all-topics `*`. Alias: POST /v1/t/{topic}.
 
 Action types: open_app, link, inbox, show_box, copy (max 3 buttons).
 Prefer show_box instead of inventing deep links.

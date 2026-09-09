@@ -31,7 +31,7 @@
   },
   "include": [
     "src",
-    "shared/notify.ts"
+    "shared"
   ],
   "exclude": [
     "shared/**/*.test.ts"
