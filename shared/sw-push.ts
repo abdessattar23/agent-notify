@@ -24,8 +24,8 @@ export type ShowNotification = {
     image?: string;
     data: NotificationData;
     actions: Array<{ action: string; title: string; icon?: string }>;
-    appBadge?: number;
   };
+  appBadge?: number;
 };
 
 export type FocusableClient = {
@@ -139,15 +139,16 @@ export function buildShowNotification(raw: unknown): ShowNotification {
     options.image = notification.image;
   }
 
+  const shown: ShowNotification = { title, options };
   const badgeRaw = notification.app_badge;
   if (badgeRaw != null) {
     const count = Number.parseInt(String(badgeRaw), 10);
     if (Number.isFinite(count) && count >= 0) {
-      options.appBadge = count;
+      shown.appBadge = count;
     }
   }
 
-  return { title, options };
+  return shown;
 }
 
 export function resolveClickTarget(

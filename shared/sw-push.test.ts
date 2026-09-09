@@ -67,6 +67,14 @@ describe("buildShowNotification", () => {
     assert.equal(shown.options.data.url, "/");
     assert.equal(shown.options.silent, false);
   });
+
+  it("exposes app_badge beside notification options so Chromium showNotification stays valid", () => {
+    const shown = buildShowNotification({
+      notification: { title: "Badge", app_badge: "3" },
+    });
+    assert.equal(shown.appBadge, 3);
+    assert.equal("appBadge" in shown.options, false);
+  });
 });
 
 describe("resolveClickTarget", () => {
