@@ -1,16 +1,16 @@
 # Agent Notify
 
-Personal [Netlify](https://www.netlify.com/) PWA + API. Authenticated AI agents `POST /v1/notify`; you get a Web Push on the iPhone Home Screen app (iOS 16.4+ and iOS 26).
+Personal [Netlify](https://www.netlify.com/) PWA + API. Authenticated AI agents `POST /v1/notify`; you get a Web Push on the **same** installable PWA — iPhone Home Screen (primary on iOS), Android Chrome, and desktop Chrome / Edge. There is no native app.
 
 **Live:** https://agent-notify.netlify.app
 
 This started as a single-user MVP and now optionally supports **multiple accounts** with per-account devices, agent tokens, and topics. Hosting is **Netlify static files + Netlify Functions**. Subscriptions and rate-limit/token usage live in **Netlify Blobs**. There are no Cloudflare Workers. Solo deploys that only set `AGENT_API_TOKEN` keep working.
 
-On iPhone, **Add to Home Screen is required**. Safari tabs cannot receive Web Push. Permission is requested only from a user gesture. Payloads use [Declarative Web Push](https://webkit.org/blog/16535/meet-declarative-web-push/) (`web_push: 8030`) so iOS can show a notification even if the service worker was evicted. Silent push is never sent (`userVisibleOnly` + `silent: false`).
+On iPhone, **Add to Home Screen is required**. Safari tabs cannot receive Web Push. Android Chrome and desktop Chromium can receive classic Web Push in a browser tab; installing the PWA is recommended on Android and optional on desktop. Permission is requested only from a user gesture. Payloads use [Declarative Web Push](https://webkit.org/blog/16535/meet-declarative-web-push/) (`web_push: 8030`) so iOS can show a notification even if the service worker was evicted. Chromium clients handle the same payload in `public/sw.js` via the classic `push` + `notificationclick` events. Silent push is never sent (`userVisibleOnly` + `silent: false`).
 
 ## What you get
 
-- PWA: install instructions, standalone detection, Enable notifications, status, test ping, inbox + `/go/*` tap router, `display: standalone` manifest + icons, service worker
+- PWA: platform install hints (iOS / Android / desktop), standalone detection, Enable notifications, status, test ping, inbox + `/go/*` tap router, `display: standalone` manifest + icons, service worker
 - API: health, VAPID public key, subscribe / unsubscribe, authenticated notify with action buttons, inbox Blobs store, hourly rate limit, prune of dead subscriptions (404/410)
 - Local preview server that uses the same function handlers (file-backed blobs when not on Netlify)
 - MCP server + skill under `mcp/` and `skills/agent-notify/` for agents
@@ -64,6 +64,49 @@ Blobs are provisioned automatically for Functions. No extra database.
 6. Tap **Test ping**. You should see a lock-screen notification.
 
 Requirements: iOS 16.4 or later (including 26). Focus / Low Power can delay delivery. There is no silent push and no background data sync.
+
+## Android Chrome setup
+
+1. Open the deployed HTTPS URL in **Chrome** (not an in-app browser).
+2. Optional but recommended: tap the Chrome menu (**⋮**) → **Install app** or **Add to Home screen**. Keep the name **Agent Notify**.
+3. Open the installed app (or stay in the Chrome tab) and tap **Enable notifications**.
+4. Tap **Test ping**. You should see a system notification.
+
+Push works from the Chrome tab after permission is granted. Installing the PWA is still recommended so OEM battery savers are less likely to evict the service worker.
+
+## Desktop Chrome / Edge setup
+
+1. Open the deployed HTTPS URL in **Chrome** or **Edge** (Chromium). Desktop Safari is not a verified client.
+2. Optional: install from the address-bar install icon if you want a standalone window.
+3. Click **Enable notifications** and allow the permission prompt (padlock → Notifications if the icon was blocked).
+4. Click **Test ping**.
+
+Chrome on localhost can also subscribe during `npm run dev`. An iPhone still needs the Netlify HTTPS origin.
+
+## Multi-device
+
+One agent token fans out to **every subscribed device** on that account (solo: every stored subscription). Enable the PWA on an iPhone, an Android phone, and a desktop browser — they all receive the same notify unless a device topic filter excludes it.
+
+## Troubleshooting
+
+- **Permission denied:** iOS — delete the Home Screen icon and add it again, then allow the prompt. Android / desktop — site settings → Notifications → Allow (desktop: padlock icon).
+- **Android: no notification:** check Chrome notifications are allowed at the OS level. On Samsung / Xiaomi / Oppo / OnePlus, disable battery optimization for Chrome or the installed PWA.
+- **iPhone: no notification:** confirm you launched the Home Screen app (not a Safari tab). Focus and Low Power Mode can delay delivery.
+- **Desktop: no notification:** OS Focus / Do Not Disturb hides banners. Confirm Chrome/Edge is not set to “quiet”.
+- **Action buttons do nothing:** update the service worker (reload the installed app once). Chromium uses `notificationclick`; iOS can also use Declarative Web Push `navigate`.
+
+## Manual Chromium smoke checklist
+
+Use a real Android Chrome device or desktop Chrome/Edge against the deployed HTTPS origin (or `npm run dev` on desktop):
+
+1. [ ] Open the PWA URL in Chrome/Edge. Status should **not** say Home Screen is required.
+2. [ ] Enable notifications and allow the permission prompt.
+3. [ ] Test ping shows a system notification with the expected title/body.
+4. [ ] Tap the notification body — app focuses or opens the default action (`/inbox/:id` or `/go/*`).
+5. [ ] Send a notify with two actions (copy + link). Both buttons open the matching `/go/*` route.
+6. [ ] Optional: Install app, repeat ping + tap.
+7. [ ] iOS regression: Home Screen app still receives Declarative Web Push (including when the worker was evicted).
+8. [ ] Multi-device: one token reaches both the Chromium client and an iPhone if both are subscribed.
 
 ## Agent curl
 

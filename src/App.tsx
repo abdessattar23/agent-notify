@@ -1,5 +1,6 @@
-import { BellRing, Home, LoaderCircle, Smartphone, Wifi } from "lucide-react";
+import { BellRing, LoaderCircle } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { InstallHint } from "@/components/InstallHint";
 import { AccountNav } from "@/components/Nav";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -20,12 +21,18 @@ import {
 } from "@/lib/api";
 import { loadSecret, saveSecret } from "@/lib/secret";
 import {
+  currentClientPlatform,
   displayMode,
-  isIosDevice,
   isStandalone,
   notificationPermission,
   pushSupported,
+  type ClientPlatform,
 } from "@/lib/device";
+import {
+  installRequired,
+  notificationsHint,
+  statusHint,
+} from "../shared/platform.ts";
 import {
   currentSubscription,
   registerServiceWorker,
@@ -47,7 +54,7 @@ type UiState = {
   me: MeResponse | null;
   permission: NotificationPermission | "unsupported";
   standalone: boolean;
-  ios: boolean;
+  platform: ClientPlatform;
   subscribed: boolean;
   endpointTail: string | null;
 };
@@ -61,7 +68,7 @@ export default function App() {
     me: null,
     permission: "default",
     standalone: false,
-    ios: false,
+    platform: "desktop",
     subscribed: false,
     endpointTail: null,
   });
@@ -85,7 +92,7 @@ export default function App() {
       me,
       permission: notificationPermission(),
       standalone: isStandalone(),
-      ios: isIosDevice(),
+      platform: currentClientPlatform(),
       subscribed: Boolean(subscription),
       endpointTail: subscription ? subscription.endpoint.slice(-18) : null,
     }));
@@ -112,14 +119,14 @@ export default function App() {
     };
   }, [refresh]);
 
-  const iosNeedsInstall = state.ios && !state.standalone;
+  const needsInstall = installRequired(state.platform) && !state.standalone;
   const needsAccount = Boolean(state.health?.multiAccount && !state.me?.account);
   const canEnable = useMemo(() => {
     if (!pushSupported()) return false;
-    if (iosNeedsInstall) return false;
+    if (needsInstall) return false;
     if (needsAccount) return false;
     return true;
-  }, [iosNeedsInstall, needsAccount]);
+  }, [needsInstall, needsAccount]);
 
   async function enableNotifications() {
     setState((current) => ({ ...current, busy: true, error: null }));
@@ -128,7 +135,7 @@ export default function App() {
       if (!pushSupported()) {
         throw new Error("This browser does not support Web Push.");
       }
-      if (iosNeedsInstall) {
+      if (needsInstall) {
         throw new Error("Add Agent Notify to your Home Screen first, then open it from there.");
       }
       const permission = await Notification.requestPermission();
@@ -188,11 +195,11 @@ export default function App() {
       <header className="flex items-start justify-between gap-4">
         <div>
           <p className="text-xs uppercase tracking-[0.22em] text-signal">Agent Notify</p>
-          <h1 className="mt-2 font-serif text-4xl leading-none text-foam">Your iPhone, pinged by agents.</h1>
+          <h1 className="mt-2 font-serif text-4xl leading-none text-foam">Your devices, pinged by agents.</h1>
           <p className="mt-3 max-w-sm text-sm leading-6 text-mist/85">
             {state.health?.multiAccount
-              ? "Add this site to the Home Screen, enable notifications, then send per-account agent tokens."
-              : "Add this site to the Home Screen, enable notifications, then let a single agent token send Web Push to you."}
+              ? "Install the same PWA on iPhone, Android Chrome, or desktop Chromium, enable notifications, then send per-account agent tokens."
+              : "Install the same PWA on iPhone, Android Chrome, or desktop Chromium, enable notifications, then let a single agent token send Web Push to you."}
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             <Button asChild variant="secondary" size="sm">
@@ -284,12 +291,12 @@ export default function App() {
 
       <Card>
         <CardTitle>Status</CardTitle>
-        <CardHint>iOS 16.4+ / 26 Home Screen web apps only. Safari in a tab cannot receive push.</CardHint>
+        <CardHint>{statusHint(state.platform, state.standalone)}</CardHint>
         <dl className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <StatusRow
             label="Display"
             value={displayMode() === "standalone" ? "Standalone" : "Browser tab"}
-            tone={state.standalone ? "good" : state.ios ? "warn" : "muted"}
+            tone={state.standalone ? "good" : installRequired(state.platform) ? "warn" : "muted"}
           />
           <StatusRow
             label="Permission"
@@ -312,7 +319,7 @@ export default function App() {
         ) : null}
       </Card>
 
-      {iosNeedsInstall ? <InstallCard /> : null}
+      <InstallHint platform={state.platform} standalone={state.standalone} />
 
       {state.health?.ownerSetupRequired && !state.health.multiAccount ? (
         <Card>
@@ -334,10 +341,7 @@ export default function App() {
 
       <Card>
         <CardTitle>Notifications</CardTitle>
-        <CardHint>
-          Permission is requested only from this button. iOS will not show the prompt unless you opened the Home Screen
-          app.
-        </CardHint>
+        <CardHint>{notificationsHint(state.platform)}</CardHint>
         <div className="mt-5 flex flex-col gap-3 sm:flex-row">
           <Button onClick={() => void enableNotifications()} disabled={state.busy || !canEnable}>
             {state.busy ? <LoaderCircle className="size-4 animate-spin" /> : <BellRing className="size-4" />}
@@ -419,29 +423,6 @@ function StatusRow({
         <Badge tone={tone}>{value}</Badge>
       </dd>
     </div>
-  );
-}
-
-function InstallCard() {
-  return (
-    <Card>
-      <CardTitle>Add to Home Screen</CardTitle>
-      <CardHint>Required on iPhone. Push is not available from a Safari tab.</CardHint>
-      <ol className="mt-4 space-y-3 text-sm leading-6 text-mist">
-        <li className="flex gap-3">
-          <Home className="mt-0.5 size-4 shrink-0 text-signal" />
-          Open this URL in Safari — not Chrome or in-app browsers.
-        </li>
-        <li className="flex gap-3">
-          <Smartphone className="mt-0.5 size-4 shrink-0 text-signal" />
-          Tap Share, then Add to Home Screen. Keep the name Agent Notify.
-        </li>
-        <li className="flex gap-3">
-          <Wifi className="mt-0.5 size-4 shrink-0 text-signal" />
-          Launch the icon, then tap Enable notifications. iOS 16.4 or later (including 26) is required.
-        </li>
-      </ol>
-    </Card>
   );
 }
 

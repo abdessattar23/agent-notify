@@ -73,9 +73,9 @@ Every rich tap is routed through the PWA:
 
 If `default_action` is omitted and `url` is set, the default tap is a `link`. Otherwise the default tap opens the stored inbox item.
 
-The server wraps this in Declarative Web Push (`web_push: 8030`, `mutable: true`, `silent: false`) with `navigate`, optional `image` / `app_badge`, and `notification.actions` navigate URLs. Each notify is persisted for `GET /api/inbox` (per account when multi-account is on).
+The server wraps this in Declarative Web Push (`web_push: 8030`, `mutable: true`, `silent: false`) with `navigate`, optional `image` / `app_badge`, and `notification.actions` navigate URLs. iOS Home Screen can show that payload without a resident worker. Chromium (Android Chrome, desktop Chrome/Edge) delivers the same JSON to the service worker’s classic `push` event; action buttons use `notificationclick`. Each notify is persisted for `GET /api/inbox` (per account when multi-account is on).
 
-Omit `topic` to notify every device on the token’s account (or every stored subscription in solo mode). A named topic reaches devices subscribed to that topic or devices with all-topics `*`. Alias: `POST {SITE}/v1/t/{topic}` with the same auth and body.
+Omit `topic` to notify every device on the token’s account (or every stored subscription in solo mode). That includes every subscribed iPhone Home Screen app, Android Chrome client, and desktop Chrome/Edge window — one token fans out to all of them. A named topic reaches devices subscribed to that topic or devices with all-topics `*`. Alias: `POST {SITE}/v1/t/{topic}` with the same auth and body.
 
 ## Example
 

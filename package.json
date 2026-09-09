@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "Personal Netlify PWA + API: AI agents POST notifications, owner gets Web Push on iPhone.",
+  "description": "Personal Netlify PWA + API: AI agents POST notifications, owner gets Web Push on iPhone, Android Chrome, and desktop Chromium.",
   "engines": {
     "node": ">=18.18.0"
   },
