@@ -122,3 +122,5 @@ If `409 no_subscriptions`, tell the owner to Enable notifications. Do not tight-
 ## Other endpoints
 
 Agents only need `/v1/notify`. Owner PWA uses `/api/subscribe`, `/api/ping`, `/api/inbox`, `/api/vapid-public-key`.
+
+Personal OS ledger bots use `POST /api/personal-os/events` with a per-bot bearer token (not `AGENT_API_TOKEN`). See [docs/personal-os.md](./docs/personal-os.md). Do not scrape any UI. Do not send routine heartbeats as pushes.

@@ -1,4 +1,4 @@
-import { tokensStore } from "./store.ts";
+import { tokensStore, type BlobStore } from "./store.ts";
 
 export type RateLimitDecision =
   | { ok: true; remaining: number; limit: number; resetEpochSec: number }
@@ -23,17 +23,24 @@ export function nextCount(existing: WindowRecord | null, windowId: string): numb
   return existing.count + 1;
 }
 
-export async function consumeAgentRateLimit(limit: number): Promise<RateLimitDecision> {
-  const { id, resetEpochSec } = hourWindow();
-  const store = tokensStore();
-  const key = "agent-hourly";
+export async function consumeNamedRateLimit(
+  key: string,
+  limit: number,
+  now = new Date(),
+  store: BlobStore = tokensStore(),
+): Promise<RateLimitDecision> {
+  const { id, resetEpochSec } = hourWindow(now);
   const existing = await store.getJSON<WindowRecord>(key);
   const count = nextCount(existing, id);
   if (count > limit) {
     return { ok: false, remaining: 0, limit, resetEpochSec };
   }
-  await store.setJSON(key, { count, window: id, lastUsedAt: new Date().toISOString() });
+  await store.setJSON(key, { count, window: id, lastUsedAt: now.toISOString() });
   return { ok: true, remaining: Math.max(0, limit - count), limit, resetEpochSec };
+}
+
+export async function consumeAgentRateLimit(limit: number): Promise<RateLimitDecision> {
+  return consumeNamedRateLimit("agent-hourly", limit);
 }
 
 export function rateLimitHeaders(decision: RateLimitDecision): HeadersInit {

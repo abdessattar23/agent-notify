@@ -105,6 +105,9 @@ Chrome on localhost can subscribe and receive push. An iPhone still needs the Ne
 | `DELETE` | `/api/subscribe` | `X-Owner-Secret` if configured | Remove a subscription |
 | `POST` | `/api/ping` | `X-Owner-Secret` if configured | Owner test push |
 | `GET` | `/api/inbox` / `/api/inbox/:id` | `X-Owner-Secret` if configured | Owner inbox |
+| `POST` | `/api/personal-os/events` | per-bot bearer (`PERSONAL_OS_BOT_TOKENS` / `PERSONAL_OS_TOKEN_<BOT>`) | Idempotent Personal OS ingest |
+| `GET` | `/api/personal-os/dashboard` | `X-Owner-Secret` if configured | Personal OS aggregation |
+| `POST` | `/api/personal-os/seed` | owner + `PERSONAL_OS_ALLOW_SEED` (blocked on the production hostname) | DEV-ONLY sample events |
 | `POST` | `/v1/notify` | `Authorization: Bearer $AGENT_API_TOKEN` | Agent push (rate limited) |
 
 Notify body (rich tap-actions):
@@ -141,10 +144,13 @@ Action types: `open_app` | `link` | `inbox` | `show_box` | `copy` (max 3 buttons
 
 ```
 netlify/functions/   TypeScript Functions 2.0 handlers
-netlify/lib/         Blobs, VAPID, auth, rate limit, inbox
+netlify/lib/         Blobs, VAPID, auth, rate limit, inbox, Personal OS
 public/sw.js         Push + action clicks + offline shell
-src/                 PWA UI (home, inbox, /go router)
+src/                 PWA UI (home, inbox, /os, /go router)
 shared/              Payload validation used by Functions
+docs/personal-os.md  Personal OS architecture, privacy, seed
 mcp/                 MCP server for notify
 skills/agent-notify/ Agent skill docs
 ```
+
+Personal OS (`/os`) is a draft owner dashboard for sanitized bot-published events. See [docs/personal-os.md](./docs/personal-os.md). Draft preview only; do not use production secrets.

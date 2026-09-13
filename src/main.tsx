@@ -4,6 +4,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import App from "./App.tsx";
 import InboxDetailPage from "./pages/InboxDetailPage.tsx";
 import InboxPage from "./pages/InboxPage.tsx";
+import PersonalOsPage from "./pages/PersonalOsPage.tsx";
 import { GoAppPage, GoBoxPage, GoCopyPage, GoLinkPage } from "./pages/GoPages.tsx";
 import "./index.css";
 
@@ -19,6 +20,7 @@ createRoot(root).render(
         <Route path="/" element={<App />} />
         <Route path="/inbox" element={<InboxPage />} />
         <Route path="/inbox/:id" element={<InboxDetailPage />} />
+        <Route path="/os" element={<PersonalOsPage />} />
         <Route path="/go/app" element={<GoAppPage />} />
         <Route path="/go/link" element={<GoLinkPage />} />
         <Route path="/go/copy" element={<GoCopyPage />} />

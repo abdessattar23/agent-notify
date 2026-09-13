@@ -182,9 +182,12 @@ export default function App() {
           <p className="mt-3 max-w-sm text-sm leading-6 text-mist/85">
             Add this site to the Home Screen, enable notifications, then let a single agent token send Web Push to you.
           </p>
-          <div className="mt-4">
+          <div className="mt-4 flex flex-wrap gap-2">
             <Button asChild variant="secondary" size="sm">
               <Link to="/inbox">Open inbox</Link>
+            </Button>
+            <Button asChild variant="secondary" size="sm">
+              <Link to="/os">Personal OS</Link>
             </Button>
           </div>
         </div>

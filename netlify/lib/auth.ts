@@ -24,6 +24,19 @@ export function requireAgentToken(req: Request): AuthResult {
   return { ok: true };
 }
 
+export function requirePersonalOsBot(req: Request, sourceBot: string): AuthResult {
+  const env = getRuntimeEnv();
+  if (Object.keys(env.personalOsBotTokens).length === 0) {
+    return { ok: false, status: 503, error: "personal_os_tokens_unconfigured" };
+  }
+  const expected = env.personalOsBotTokens[sourceBot];
+  const token = bearerToken(req);
+  if (!expected || !token || !secretsEqual(token, expected)) {
+    return { ok: false, status: 401, error: "unauthorized" };
+  }
+  return { ok: true };
+}
+
 export function requireOwnerAccess(req: Request): AuthResult {
   const env = getRuntimeEnv();
   if (!env.ownerSetupSecret) {

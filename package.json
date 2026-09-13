@@ -15,7 +15,8 @@
     "test": "tsx --test shared/*.test.ts netlify/lib/*.test.ts",
     "lint": "oxlint",
     "generate:vapid": "tsx scripts/generate-vapid.ts",
-    "generate:icons": "python3 scripts/generate-icons.py"
+    "generate:icons": "python3 scripts/generate-icons.py",
+    "seed:personal-os": "tsx scripts/seed-personal-os.ts"
   },
   "dependencies": {
     "@netlify/blobs": "^10.0.10",
