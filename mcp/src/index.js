@@ -1,4 +1,9 @@
 import { createInterface } from "node:readline";
+import {
+  callOsAdapterTool,
+  isOsAdapterTool,
+  listOsAdapterTools,
+} from "./os-adapter.js";
 
 const SITE = (process.env.AGENT_NOTIFY_SITE || process.env.SITE_URL || "").replace(/\/$/, "");
 const TOKEN = process.env.AGENT_API_TOKEN || "";
@@ -83,12 +88,27 @@ rl.on("line", async (line) => {
       return;
     }
     if (method === "tools/list") {
-      send({ jsonrpc: "2.0", id, result: { tools: TOOLS } });
+      send({
+        jsonrpc: "2.0",
+        id,
+        result: { tools: [...TOOLS, ...listOsAdapterTools()] },
+      });
       return;
     }
     if (method === "tools/call") {
       const name = params?.name;
       const args = params?.arguments ?? {};
+      if (isOsAdapterTool(name)) {
+        const result = await callOsAdapterTool(name, args);
+        send({
+          jsonrpc: "2.0",
+          id,
+          result: {
+            content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+          },
+        });
+        return;
+      }
       if (name !== "agent_notify") {
         send({
           jsonrpc: "2.0",

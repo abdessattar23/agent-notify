@@ -1,4 +1,5 @@
 import type { Config, Context } from "@netlify/functions";
+import { isOsAdapterEnabled, isOsLivePushEnabled } from "../../shared/os-adapter.ts";
 import { getRuntimeEnv, vapidConfigured } from "../lib/env.ts";
 import { json, methodNotAllowed, optionsResponse } from "../lib/http.ts";
 import { listSubscriptions } from "../lib/store.ts";
@@ -30,6 +31,8 @@ async function health(): Promise<Response> {
     agentTokenConfigured: Boolean(env.agentApiToken),
     ownerSetupRequired: Boolean(env.ownerSetupSecret),
     subscriptionCount,
+    osAdapterEnabled: isOsAdapterEnabled(),
+    osLivePushEnabled: isOsLivePushEnabled(),
   });
 }
 

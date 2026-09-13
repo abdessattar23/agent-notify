@@ -122,3 +122,5 @@ If `409 no_subscriptions`, tell the owner to Enable notifications. Do not tight-
 ## Other endpoints
 
 Agents only need `/v1/notify`. Owner PWA uses `/api/subscribe`, `/api/ping`, `/api/inbox`, `/api/vapid-public-key`.
+
+The Personal OS MCP adapter (`POST /api/os-adapter`, four extra MCP tools) is a separate maintainer surface. It is **disabled by default** and is not part of this notify contract. See `docs/os-mcp-adapter.md`.

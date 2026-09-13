@@ -6,6 +6,7 @@ import ping from "../netlify/functions/ping.ts";
 import subscribe from "../netlify/functions/subscribe.ts";
 import vapidPublicKey from "../netlify/functions/vapid-public-key.ts";
 import inbox from "../netlify/functions/inbox.ts";
+import osAdapter from "../netlify/functions/os-adapter.ts";
 
 type Handler = (req: Request, context: Context) => Promise<Response> | Response;
 
@@ -16,6 +17,7 @@ const routes = new Map<string, Handler>([
   ["/api/ping", ping],
   ["/api/inbox", inbox],
   ["/v1/notify", notify],
+  ["/api/os-adapter", osAdapter],
 ]);
 
 export async function handleLocalApi(req: IncomingMessage, res: ServerResponse): Promise<boolean> {

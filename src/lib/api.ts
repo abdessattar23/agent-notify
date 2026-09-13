@@ -7,6 +7,8 @@ export type HealthResponse = {
   agentTokenConfigured: boolean;
   ownerSetupRequired: boolean;
   subscriptionCount: number;
+  osAdapterEnabled?: boolean;
+  osLivePushEnabled?: boolean;
 };
 
 export type NotifySummary = {
