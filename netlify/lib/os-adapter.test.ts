@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
+import { OS_ADAPTER_SCHEMA_VERSION } from "../../shared/os-adapter.ts";
 import { handleOsAdapterRequest, redactOsAudit } from "./os-adapter.ts";
 import type { BlobStore } from "./store.ts";
 
@@ -33,6 +34,7 @@ function enabledEnv(overrides: Record<string, string> = {}) {
 function attentionBody(overrides: Record<string, unknown> = {}) {
   return {
     tool: "request_user_attention",
+    schemaVersion: OS_ADAPTER_SCHEMA_VERSION,
     idempotencyKey: "idem-key-001",
     botId: "personal-ops",
     timestamp: "2026-09-13T12:00:00.000Z",
@@ -105,6 +107,13 @@ describe("os adapter request handler", () => {
     assert.equal(response.status, 200);
     assert.equal(json.ok, true);
     assert.equal(json.livePush, "dry_run");
+    assert.equal(json.schemaVersion, OS_ADAPTER_SCHEMA_VERSION);
+  });
+
+  it("rejects a mismatched schema version", async () => {
+    const { response, json } = await call(attentionBody({ schemaVersion: "9.9.9" }));
+    assert.equal(response.status, 400);
+    assert.equal(json.error, "unsupported_schema_version");
   });
 
   it("rejects a stale timestamp outside the replay window", async () => {
@@ -172,6 +181,7 @@ describe("os adapter request handler", () => {
     assert.equal(audit.summary, undefined);
     assert.equal(audit.note, undefined);
     assert.ok(Array.isArray(audit.fieldNames));
+    assert.equal(audit.schemaVersion, OS_ADAPTER_SCHEMA_VERSION);
   });
 
   it("does not send live Web Push when the notify gate is off", async () => {
@@ -191,6 +201,7 @@ describe("os adapter request handler", () => {
     const approval = await call(
       {
         tool: "request_approval",
+        schemaVersion: OS_ADAPTER_SCHEMA_VERSION,
         idempotencyKey: "idem-appr-1",
         botId: "personal-ops",
         timestamp: "2026-09-13T12:00:00.000Z",
@@ -205,10 +216,12 @@ describe("os adapter request handler", () => {
       { store },
     );
     assert.equal(approval.response.status, 200);
+    assert.equal(approval.json.schemaVersion, OS_ADAPTER_SCHEMA_VERSION);
 
     const ack = await call(
       {
         tool: "acknowledge_decision",
+        schemaVersion: OS_ADAPTER_SCHEMA_VERSION,
         idempotencyKey: "idem-ack-1",
         botId: "personal-ops",
         timestamp: "2026-09-13T12:00:00.000Z",
@@ -221,6 +234,7 @@ describe("os adapter request handler", () => {
     );
     assert.equal(ack.response.status, 200);
     assert.equal(ack.json.choice, "submit");
+    assert.equal(ack.json.schemaVersion, OS_ADAPTER_SCHEMA_VERSION);
   });
 
   it("rejects an acknowledge choice that matches neither a prior option nor the allowlist", async () => {
@@ -228,6 +242,7 @@ describe("os adapter request handler", () => {
     await call(
       {
         tool: "request_approval",
+        schemaVersion: OS_ADAPTER_SCHEMA_VERSION,
         idempotencyKey: "idem-appr-2",
         botId: "personal-ops",
         timestamp: "2026-09-13T12:00:00.000Z",
@@ -241,6 +256,7 @@ describe("os adapter request handler", () => {
     const ack = await call(
       {
         tool: "acknowledge_decision",
+        schemaVersion: OS_ADAPTER_SCHEMA_VERSION,
         idempotencyKey: "idem-ack-2",
         botId: "personal-ops",
         timestamp: "2026-09-13T12:00:00.000Z",
@@ -261,6 +277,7 @@ describe("redactOsAudit", () => {
     const redacted = redactOsAudit({
       tool: "request_user_attention",
       botId: "personal-ops",
+      schemaVersion: OS_ADAPTER_SCHEMA_VERSION,
       summary: "do not store this text",
       token: "super-secret",
       emailBody: "From: a@b.com",
@@ -268,6 +285,7 @@ describe("redactOsAudit", () => {
     });
     assert.equal(redacted.botId, "personal-ops");
     assert.equal(redacted.tool, "request_user_attention");
+    assert.equal(redacted.schemaVersion, OS_ADAPTER_SCHEMA_VERSION);
     assert.equal(redacted.summaryLength, "do not store this text".length);
     assert.equal("summary" in redacted, false);
     assert.equal("token" in redacted, false);

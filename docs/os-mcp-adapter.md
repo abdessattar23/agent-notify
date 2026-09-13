@@ -32,10 +32,29 @@ Existing `agent_notify` is unchanged and separate.
 
 When the adapter is disabled they are omitted from MCP `tools/list` and `tools/call` hard-refuses with `os_adapter_disabled`.
 
+## Versioned contract
+
+Shared constant: `OS_ADAPTER_SCHEMA_VERSION = "1.0.0"` in `shared/os-adapter.ts` (mirrored in `mcp/src/os-adapter.js`).
+
+Every accepted request for the four tools **must** send `schemaVersion: "1.0.0"`. There is no default. Missing, empty, or any other string is `400 unsupported_schema_version`.
+
+API and MCP success bodies echo `schemaVersion`. Redacted audit metadata also stores `schemaVersion` (not payload text).
+
+Dashboard stubs and Agent Notify must import or copy this constant. Do not invent a parallel version string.
+
+### Version bump policy
+
+- **Patch** (`1.0.x`): docs/clarification only. Field set and enums stay identical. Keep accepting `1.0.0`.
+- **Minor** (`1.x.0`): additive optional fields or new allowlisted enum values that old senders can omit. Bump `OS_ADAPTER_SCHEMA_VERSION`. Old versions are rejected unless explicitly added to `OS_ADAPTER_SCHEMA_VERSIONS`.
+- **Major** (`x.0.0`): required-field or semantic change. Bump and reject previous versions until a documented dual-read window is added to the allowlist.
+
+Never silently accept an unknown version. A dashboard stub on a different version must fail closed.
+
 ## Common fields (all four)
 
 | Field | Rules |
 | --- | --- |
+| `schemaVersion` | required. Must be `1.0.0` (`OS_ADAPTER_SCHEMA_VERSION`). |
 | `idempotencyKey` | required, 8–128, token-safe. Repeat returns the stored result. |
 | `botId` | required, lowercase allowlisted id. Must exist in `AGENT_NOTIFY_OS_BOTS`. |
 | `timestamp` | required UTC ISO-8601 (`…Z`). Must fall inside the replay window. |
@@ -98,7 +117,7 @@ Replay window: **300 seconds** (`AGENT_NOTIFY_OS_REPLAY_WINDOW_SEC`). A timestam
 
 Accepted events, idempotency receipts, nonces, per-bot rate windows, decision option sets, and redacted audit rows live in the **`os-adapter`** blob store (file-backed under `.data/blobs/os-adapter` in local preview).
 
-Audit records keep `botId`, `tool`, `outcome`, error codes, `summaryLength`, and non-sensitive field names. They do **not** store summaries, notes, tokens, or email/CV text.
+Audit records keep `botId`, `tool`, `schemaVersion`, `outcome`, error codes, `summaryLength`, and non-sensitive field names. They do **not** store summaries, notes, tokens, or email/CV text.
 
 ## How to test (local only)
 
@@ -107,7 +126,7 @@ npm test
 npm run typecheck
 ```
 
-Covered: disable-default, schemas, auth, replay/idempotency, per-bot rate limit, redaction, company/forbidden content, no arbitrary URL params, MCP list/refuse.
+Covered: disable-default, schemas, `schemaVersion` accept/reject, auth, replay/idempotency, per-bot rate limit, redaction, company/forbidden content, no arbitrary URL params, MCP list/refuse.
 
 Optional local dry-run (still not a production deploy):
 
@@ -121,6 +140,7 @@ curl -sS -X POST http://127.0.0.1:43177/api/os-adapter \
   -H "Content-Type: application/json" \
   -d '{
     "tool":"request_user_attention",
+    "schemaVersion":"1.0.0",
     "idempotencyKey":"idem-dev-001",
     "botId":"personal-ops",
     "timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"'",

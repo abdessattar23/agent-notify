@@ -30,6 +30,9 @@ export const OS_RATE_LIMIT_ENV = "AGENT_NOTIFY_OS_RATE_LIMIT_PER_HOUR";
 
 export const DEFAULT_REPLAY_WINDOW_SEC = 300;
 export const DEFAULT_OS_RATE_LIMIT = 20;
+export const OS_ADAPTER_SCHEMA_VERSION = "1.0.0";
+export const OS_ADAPTER_SCHEMA_VERSIONS = [OS_ADAPTER_SCHEMA_VERSION] as const;
+export type OsAdapterSchemaVersion = (typeof OS_ADAPTER_SCHEMA_VERSIONS)[number];
 
 const IDEMPOTENCY_MAX = 128;
 const NONCE_MAX = 128;
@@ -102,11 +105,12 @@ const CV_RE = /curriculum\s+vitae|\bcv\s+attachment\b|linkedin\.com\/in\//i;
 const PEM_RE = /-----BEGIN [A-Z ]+PRIVATE KEY-----/;
 const BEARER_RE = /bearer\s+[A-Za-z0-9._\-+/=]{8,}/i;
 
-const COMMON_KEYS = ["tool", "idempotencyKey", "botId", "timestamp", "nonce", "summary"] as const;
+const COMMON_KEYS = ["tool", "schemaVersion", "idempotencyKey", "botId", "timestamp", "nonce", "summary"] as const;
 
 export type OsParseResult<T> = { ok: true; value: T } | { ok: false; error: string };
 
 export type OsCommonFields = {
+  schemaVersion: OsAdapterSchemaVersion;
   idempotencyKey: string;
   botId: string;
   timestamp: string;
@@ -197,8 +201,9 @@ export const OS_ADAPTER_MCP_TOOLS: OsMcpToolDefinition[] = [
     inputSchema: {
       type: "object",
       additionalProperties: false,
-      required: ["idempotencyKey", "botId", "timestamp", "nonce", "summary", "area", "status", "title"],
+      required: ["schemaVersion", "idempotencyKey", "botId", "timestamp", "nonce", "summary", "area", "status", "title"],
       properties: {
+        schemaVersion: { type: "string", enum: [...OS_ADAPTER_SCHEMA_VERSIONS] },
         idempotencyKey: { type: "string", minLength: 8, maxLength: IDEMPOTENCY_MAX },
         botId: { type: "string", minLength: 2, maxLength: BOT_ID_MAX },
         timestamp: { type: "string", description: "UTC ISO-8601 timestamp" },
@@ -230,8 +235,9 @@ export const OS_ADAPTER_MCP_TOOLS: OsMcpToolDefinition[] = [
     inputSchema: {
       type: "object",
       additionalProperties: false,
-      required: ["idempotencyKey", "botId", "timestamp", "nonce", "summary", "reason", "urgency"],
+      required: ["schemaVersion", "idempotencyKey", "botId", "timestamp", "nonce", "summary", "reason", "urgency"],
       properties: {
+        schemaVersion: { type: "string", enum: [...OS_ADAPTER_SCHEMA_VERSIONS] },
         idempotencyKey: { type: "string", minLength: 8, maxLength: IDEMPOTENCY_MAX },
         botId: { type: "string", minLength: 2, maxLength: BOT_ID_MAX },
         timestamp: { type: "string" },
@@ -249,8 +255,9 @@ export const OS_ADAPTER_MCP_TOOLS: OsMcpToolDefinition[] = [
     inputSchema: {
       type: "object",
       additionalProperties: false,
-      required: ["idempotencyKey", "botId", "timestamp", "nonce", "summary", "decisionId", "options"],
+      required: ["schemaVersion", "idempotencyKey", "botId", "timestamp", "nonce", "summary", "decisionId", "options"],
       properties: {
+        schemaVersion: { type: "string", enum: [...OS_ADAPTER_SCHEMA_VERSIONS] },
         idempotencyKey: { type: "string", minLength: 8, maxLength: IDEMPOTENCY_MAX },
         botId: { type: "string", minLength: 2, maxLength: BOT_ID_MAX },
         timestamp: { type: "string" },
@@ -282,8 +289,9 @@ export const OS_ADAPTER_MCP_TOOLS: OsMcpToolDefinition[] = [
     inputSchema: {
       type: "object",
       additionalProperties: false,
-      required: ["idempotencyKey", "botId", "timestamp", "nonce", "summary", "decisionId", "choice"],
+      required: ["schemaVersion", "idempotencyKey", "botId", "timestamp", "nonce", "summary", "decisionId", "choice"],
       properties: {
+        schemaVersion: { type: "string", enum: [...OS_ADAPTER_SCHEMA_VERSIONS] },
         idempotencyKey: { type: "string", minLength: 8, maxLength: IDEMPOTENCY_MAX },
         botId: { type: "string", minLength: 2, maxLength: BOT_ID_MAX },
         timestamp: { type: "string" },
@@ -343,7 +351,14 @@ export function isOsAllowlistedChoice(value: string): value is OsAllowlistedChoi
   return (OS_ALLOWLISTED_CHOICES as readonly string[]).includes(value);
 }
 
+export function isOsAdapterSchemaVersion(value: string): value is OsAdapterSchemaVersion {
+  return (OS_ADAPTER_SCHEMA_VERSIONS as readonly string[]).includes(value);
+}
+
 function parseCommon(record: Record<string, unknown>): OsParseResult<OsCommonFields> {
+  const schemaVersion = parseSchemaVersion(record.schemaVersion);
+  if (!schemaVersion.ok) return schemaVersion;
+
   const idempotencyKey = requiredToken(record.idempotencyKey, "idempotencyKey", 8, IDEMPOTENCY_MAX);
   if (typeof idempotencyKey === "object") return idempotencyKey;
 
@@ -365,7 +380,14 @@ function parseCommon(record: Record<string, unknown>): OsParseResult<OsCommonFie
   const summary = requiredSanitized(record.summary, "summary", 1, SUMMARY_MAX);
   if (typeof summary === "object") return summary;
 
-  return { ok: true, value: { idempotencyKey, botId, timestamp, nonce, summary } };
+  return { ok: true, value: { schemaVersion: schemaVersion.value, idempotencyKey, botId, timestamp, nonce, summary } };
+}
+
+function parseSchemaVersion(value: unknown): OsParseResult<OsAdapterSchemaVersion> {
+  if (typeof value !== "string" || !isOsAdapterSchemaVersion(value)) {
+    return { ok: false, error: "unsupported_schema_version" };
+  }
+  return { ok: true, value };
 }
 
 function parsePublish(

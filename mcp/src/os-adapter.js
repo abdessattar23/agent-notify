@@ -1,3 +1,5 @@
+export const OS_ADAPTER_SCHEMA_VERSION = "1.0.0";
+
 const OS_ADAPTER_TOOLS = [
   {
     name: "publish_dashboard_event",
@@ -6,8 +8,9 @@ const OS_ADAPTER_TOOLS = [
     inputSchema: {
       type: "object",
       additionalProperties: false,
-      required: ["idempotencyKey", "botId", "timestamp", "nonce", "summary", "area", "status", "title"],
+      required: ["schemaVersion", "idempotencyKey", "botId", "timestamp", "nonce", "summary", "area", "status", "title"],
       properties: {
+        schemaVersion: { type: "string", enum: [OS_ADAPTER_SCHEMA_VERSION] },
         idempotencyKey: { type: "string", minLength: 8, maxLength: 128 },
         botId: { type: "string", minLength: 2, maxLength: 64 },
         timestamp: { type: "string", description: "UTC ISO-8601 timestamp" },
@@ -39,8 +42,9 @@ const OS_ADAPTER_TOOLS = [
     inputSchema: {
       type: "object",
       additionalProperties: false,
-      required: ["idempotencyKey", "botId", "timestamp", "nonce", "summary", "reason", "urgency"],
+      required: ["schemaVersion", "idempotencyKey", "botId", "timestamp", "nonce", "summary", "reason", "urgency"],
       properties: {
+        schemaVersion: { type: "string", enum: [OS_ADAPTER_SCHEMA_VERSION] },
         idempotencyKey: { type: "string", minLength: 8, maxLength: 128 },
         botId: { type: "string", minLength: 2, maxLength: 64 },
         timestamp: { type: "string" },
@@ -58,8 +62,9 @@ const OS_ADAPTER_TOOLS = [
     inputSchema: {
       type: "object",
       additionalProperties: false,
-      required: ["idempotencyKey", "botId", "timestamp", "nonce", "summary", "decisionId", "options"],
+      required: ["schemaVersion", "idempotencyKey", "botId", "timestamp", "nonce", "summary", "decisionId", "options"],
       properties: {
+        schemaVersion: { type: "string", enum: [OS_ADAPTER_SCHEMA_VERSION] },
         idempotencyKey: { type: "string", minLength: 8, maxLength: 128 },
         botId: { type: "string", minLength: 2, maxLength: 64 },
         timestamp: { type: "string" },
@@ -91,8 +96,9 @@ const OS_ADAPTER_TOOLS = [
     inputSchema: {
       type: "object",
       additionalProperties: false,
-      required: ["idempotencyKey", "botId", "timestamp", "nonce", "summary", "decisionId", "choice"],
+      required: ["schemaVersion", "idempotencyKey", "botId", "timestamp", "nonce", "summary", "decisionId", "choice"],
       properties: {
+        schemaVersion: { type: "string", enum: [OS_ADAPTER_SCHEMA_VERSION] },
         idempotencyKey: { type: "string", minLength: 8, maxLength: 128 },
         botId: { type: "string", minLength: 2, maxLength: 64 },
         timestamp: { type: "string" },

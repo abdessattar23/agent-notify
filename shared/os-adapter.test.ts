@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { afterEach, describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 import {
   DEFAULT_REPLAY_WINDOW_SEC,
+  OS_ADAPTER_SCHEMA_VERSION,
   OS_ADAPTER_TOOLS,
   OS_ALLOWLISTED_CHOICES,
   OS_AREAS,
@@ -12,6 +16,7 @@ import {
 } from "./os-adapter.ts";
 
 const COMMON = {
+  schemaVersion: "1.0.0",
   idempotencyKey: "idem-key-001",
   botId: "personal-ops",
   timestamp: "2026-09-13T12:00:00.000Z",
@@ -72,6 +77,73 @@ describe("os adapter tool catalog", () => {
     );
     const encoded = JSON.stringify(tools);
     assert.doesNotMatch(encoded, /"url"|"recipient"|"httpMethod"|"path"|"shell"|"filesystem"|"database"|"credential"|"token"/);
+    for (const tool of tools) {
+      const required = (tool.inputSchema.required as string[]) ?? [];
+      assert.ok(required.includes("schemaVersion"), tool.name);
+    }
+  });
+});
+
+describe("os adapter schema version contract", () => {
+  it("pins OS_ADAPTER_SCHEMA_VERSION to 1.0.0", () => {
+    assert.equal(OS_ADAPTER_SCHEMA_VERSION, "1.0.0");
+  });
+
+  it("accepts the current schema version on all four tools", () => {
+    const parsed = parseOsAdapterRequest({
+      tool: "request_user_attention",
+      ...COMMON,
+      reason: "deadline",
+      urgency: "high",
+    });
+    assert.equal(parsed.ok, true);
+    if (!parsed.ok) return;
+    assert.equal(parsed.value.schemaVersion, OS_ADAPTER_SCHEMA_VERSION);
+  });
+
+  it("rejects a missing schemaVersion", () => {
+    const withoutVersion = {
+      idempotencyKey: COMMON.idempotencyKey,
+      botId: COMMON.botId,
+      timestamp: COMMON.timestamp,
+      nonce: COMMON.nonce,
+      summary: COMMON.summary,
+    };
+    const parsed = parseOsAdapterRequest({
+      tool: "request_user_attention",
+      ...withoutVersion,
+      reason: "stale",
+      urgency: "normal",
+    });
+    assert.equal(parsed.ok, false);
+    if (parsed.ok) return;
+    assert.match(parsed.error, /schemaVersion|unsupported_schema_version/i);
+  });
+
+  it("rejects unknown and mismatched schema versions", () => {
+    for (const schemaVersion of ["2.0.0", "1.0", "v1", "latest", ""]) {
+      const parsed = parseOsAdapterRequest({
+        tool: "request_user_attention",
+        ...COMMON,
+        schemaVersion,
+        reason: "other",
+        urgency: "low",
+      });
+      assert.equal(parsed.ok, false, schemaVersion);
+      if (parsed.ok) continue;
+      assert.equal(parsed.error, "unsupported_schema_version");
+    }
+  });
+
+  it("documents the versioned contract in adapter docs", async () => {
+    const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+    const adapterDoc = await readFile(join(root, "docs/os-mcp-adapter.md"), "utf8");
+    const mcpDoc = await readFile(join(root, "mcp/README.md"), "utf8");
+    for (const text of [adapterDoc, mcpDoc]) {
+      assert.match(text, /1\.0\.0/);
+      assert.match(text, /schemaVersion/);
+      assert.match(text, /OS_ADAPTER_SCHEMA_VERSION|version bump|bump policy/i);
+    }
   });
 });
 

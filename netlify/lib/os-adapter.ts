@@ -36,6 +36,7 @@ export type OsAuditRecord = {
   at: string;
   botId?: string;
   tool?: string;
+  schemaVersion?: string;
   outcome: "accepted" | "rejected";
   error?: string;
   summaryLength: number;
@@ -144,6 +145,7 @@ export async function handleOsAdapterRequest(req: Request, deps: OsAdapterDeps =
     ok: true,
     eventId,
     tool: body.tool,
+    schemaVersion: body.schemaVersion,
     stored: true,
     livePush,
     ...toolResult.extra,
@@ -154,6 +156,7 @@ export async function handleOsAdapterRequest(req: Request, deps: OsAdapterDeps =
     eventId,
     tool: body.tool,
     botId: body.botId,
+    schemaVersion: body.schemaVersion,
     at: current.toISOString(),
     livePush,
   });
@@ -200,6 +203,7 @@ export function redactOsAudit(input: Record<string, unknown>): OsAuditRecord {
     at: typeof input.at === "string" ? input.at : new Date().toISOString(),
     botId: typeof input.botId === "string" ? input.botId : undefined,
     tool: typeof input.tool === "string" ? input.tool : undefined,
+    schemaVersion: typeof input.schemaVersion === "string" ? input.schemaVersion : undefined,
     outcome: input.outcome === "rejected" ? "rejected" : "accepted",
     error: typeof input.error === "string" ? input.error : undefined,
     summaryLength: typeof input.summary === "string" ? input.summary.length : 0,
