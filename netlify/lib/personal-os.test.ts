@@ -244,7 +244,7 @@ describe("rate limit + seed gate", () => {
     assert.equal(replay.idempotent, true);
   });
 
-  it("allows seed only when flagged and not in production", () => {
+  it("allows seed only when flagged and not on the production hostname", () => {
     assert.equal(personalOsSeedAllowed({ allowSeed: false, context: "dev", siteUrl: "" }), false);
     assert.equal(
       personalOsSeedAllowed({
@@ -259,6 +259,45 @@ describe("rate limit + seed gate", () => {
         allowSeed: true,
         context: "deploy-preview",
         siteUrl: "https://deploy-preview-9--agent-notify.netlify.app",
+      }),
+      true,
+    );
+    assert.equal(
+      personalOsSeedAllowed({
+        allowSeed: true,
+        context: "production",
+        siteUrl: "https://deadbeef--agent-notify.netlify.app",
+      }),
+      true,
+      "CLI drafts often set CONTEXT=production; draft hostnames must still seed",
+    );
+    assert.equal(
+      personalOsSeedAllowed({
+        allowSeed: true,
+        context: "production",
+        siteUrl: "https://agent-notify.netlify.app",
+        requestUrl: "https://deadbeef--agent-notify.netlify.app",
+        deployUrl: "https://deadbeef--agent-notify.netlify.app",
+      }),
+      true,
+      "inherited production URL must not block a draft request host",
+    );
+    assert.equal(
+      personalOsSeedAllowed({
+        allowSeed: true,
+        context: "deploy-preview",
+        siteUrl: "https://deploy-preview-3--agent-notify.netlify.app",
+        requestUrl: "https://agent-notify.netlify.app",
+      }),
+      false,
+      "canonical production hostname is always refused",
+    );
+    assert.equal(
+      personalOsSeedAllowed({
+        allowSeed: true,
+        context: "dev",
+        siteUrl: "",
+        requestUrl: "http://127.0.0.1:43177",
       }),
       true,
     );

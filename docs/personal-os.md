@@ -23,7 +23,7 @@ Grand Master Bot (future)     Other allowlisted bots
 
 - Functions v2 live at `/api/personal-os/*` via `export const config.path`. No redirects shadow them.
 - Shared validation is in `shared/personal-os.ts`.
-- Storage uses `namedStore("personal-os")` in `netlify/lib/store.ts`.
+- Storage is isolated by deploy (see **Shared Blobs / deploy isolation** below). The SDK has no `getStore({ deploySpecific: true })` flag; drafts use `getDeployStore({ name: "personal-os" })`. The published production hostname is the only path to the site-scoped ledger.
 - Rate limits reuse `consumeNamedRateLimit` in `netlify/lib/rate-limit.ts` (`personal-os:<sourceBot>`).
 - Owner reads follow the existing solo `requireOwnerAccess` / `OWNER_SETUP_SECRET` pattern on `main`. This branch does not take code from open multi-account PRs.
 
@@ -38,11 +38,22 @@ Stored timestamps are UTC ISO-8601. Every display field (`*Local`, `generatedAtL
 | Schema smuggling | Unknown / oversized fields rejected; enums allowlisted |
 | Secret or company data in the ledger | Reject Sofrecom/Orange systems, internal GitLab, Mercury/Cloud Foundry, credentials, email bodies, CV/private-file contents |
 | Source URL abuse | `https` only; credentials in URLs rejected; UI opens `rel="noopener noreferrer"` |
-| Production sample pollution | Seed requires `PERSONAL_OS_ALLOW_SEED` and is refused for `CONTEXT=production` and the production hostname |
+| Production sample pollution | Seed requires `PERSONAL_OS_ALLOW_SEED` and is **always refused** on `https://agent-notify.netlify.app`. Draft/preview hostnames (`*--agent-notify.netlify.app`) may seed even if Netlify sets `CONTEXT=production` on a CLI draft. |
+| Shared Blobs / deploy isolation | Site-scoped `getStore("personal-os")` is shared across every deploy. CLI `netlify deploy` (no `--prod`) still builds with `CONTEXT=production` and would otherwise write the production ledger. Unpublished deploys and `*--agent-notify.netlify.app` hosts use `getDeployStore({ name: "personal-os" })` so draft ingest/seed cannot touch production Blobs. Isolation is keyed on request/deploy hostname and `context.deploy.published`, **never** on `CONTEXT` alone. Ambiguous inherited `URL`/`SITE_URL` defaults to deploy-scoped. Rate-limit counters for Personal OS live in the same store as events. |
 | Notify noise / inbox spam | `PERSONAL_OS_NOTIFY_ENABLED` off by default; only approval, deadline, failure/stale, or high-value opportunity |
 | Retention / leak-over-time | 90-day TTL prune on write and read; max 500 events |
 
 Do not ingest raw email, resumes, employer documents, or any Orange/Sofrecom/GitLab/CF payload. Summaries only.
+
+### Shared Blobs / deploy isolation
+
+| Deploy | Typical host | Store |
+| --- | --- | --- |
+| Published production | `https://agent-notify.netlify.app` | Site-scoped `getStore("personal-os")` |
+| CLI draft / deploy-preview / unpublished | `https://<id-or-preview>--agent-notify.netlify.app` | Deploy-scoped `getDeployStore({ name: "personal-os" })` |
+| Local `npm run dev` | `127.0.0.1` | File store under `.data/blobs/personal-os-deploy` |
+
+Do not run `netlify deploy --prod` from this branch. A draft URL is safe to seed only with preview tokens and `PERSONAL_OS_ALLOW_SEED=1`.
 
 ## Retention and privacy
 
@@ -63,7 +74,7 @@ Set these in Netlify **Deploy Preview** or local `.env`. Never commit values.
 | `PERSONAL_OS_RATE_LIMIT_PER_HOUR` | Default `60` per source bot |
 | `PERSONAL_OS_RETENTION_DAYS` | Default `90` |
 | `PERSONAL_OS_NOTIFY_ENABLED` | `1` to push meaningful alerts through the existing notify pipeline |
-| `PERSONAL_OS_ALLOW_SEED` | `1` to enable DEV-ONLY seed (still blocked in production context) |
+| `PERSONAL_OS_ALLOW_SEED` | `1` to enable DEV-ONLY seed (always blocked on the production hostname; allowed on draft/preview hosts) |
 
 If no bot tokens are configured, ingest returns `503 personal_os_tokens_unconfigured`.
 
@@ -104,7 +115,7 @@ Owner-authenticated aggregation for the `/os` views.
 
 ### `POST /api/personal-os/seed`
 
-Owner-authenticated, DEV-ONLY. Disabled unless `PERSONAL_OS_ALLOW_SEED=1` and the deploy context is not production.
+Owner-authenticated, DEV-ONLY. Disabled unless `PERSONAL_OS_ALLOW_SEED=1`. Always refused on `https://agent-notify.netlify.app`. Allowed on `*--agent-notify.netlify.app` draft/preview hosts even if `CONTEXT=production`.
 
 ## Notify
 

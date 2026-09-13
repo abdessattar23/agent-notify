@@ -3,22 +3,22 @@ import { decidePersonalOsNotify, parsePersonalOsEvent } from "../../shared/perso
 import { requirePersonalOsBot } from "../lib/auth.ts";
 import { getRuntimeEnv, resolveSiteUrl, vapidConfigured } from "../lib/env.ts";
 import { json, methodNotAllowed, optionsResponse, readJson } from "../lib/http.ts";
-import { ingestPersonalOsEvent } from "../lib/personal-os.ts";
+import { ingestPersonalOsEvent, personalOsStoreForRequest } from "../lib/personal-os.ts";
 import { sendToAllSubscriptions } from "../lib/push.ts";
 import { rateLimitHeaders } from "../lib/rate-limit.ts";
 
-export default async function handler(req: Request, _context: Context): Promise<Response> {
+export default async function handler(req: Request, context: Context): Promise<Response> {
   switch (req.method) {
     case "OPTIONS":
       return optionsResponse();
     case "POST":
-      return ingest(req);
+      return ingest(req, context);
     default:
       return methodNotAllowed(["POST", "OPTIONS"]);
   }
 }
 
-async function ingest(req: Request): Promise<Response> {
+async function ingest(req: Request, context: Context): Promise<Response> {
   const env = getRuntimeEnv();
   const body = await readJson(req);
   if (!body.ok) {
@@ -36,6 +36,7 @@ async function ingest(req: Request): Promise<Response> {
   }
 
   const result = await ingestPersonalOsEvent(parsed, {
+    store: personalOsStoreForRequest(req, context.deploy?.published),
     now: new Date(),
     retentionDays: env.personalOsRetentionDays,
     rateLimit: env.personalOsRateLimitPerHour,

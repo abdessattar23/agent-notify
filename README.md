@@ -107,7 +107,7 @@ Chrome on localhost can subscribe and receive push. An iPhone still needs the Ne
 | `GET` | `/api/inbox` / `/api/inbox/:id` | `X-Owner-Secret` if configured | Owner inbox |
 | `POST` | `/api/personal-os/events` | per-bot bearer (`PERSONAL_OS_BOT_TOKENS` / `PERSONAL_OS_TOKEN_<BOT>`) | Idempotent Personal OS ingest |
 | `GET` | `/api/personal-os/dashboard` | `X-Owner-Secret` if configured | Personal OS aggregation |
-| `POST` | `/api/personal-os/seed` | owner + `PERSONAL_OS_ALLOW_SEED` (blocked in production) | DEV-ONLY sample events |
+| `POST` | `/api/personal-os/seed` | owner + `PERSONAL_OS_ALLOW_SEED` (blocked on the production hostname) | DEV-ONLY sample events |
 | `POST` | `/v1/notify` | `Authorization: Bearer $AGENT_API_TOKEN` | Agent push (rate limited) |
 
 Notify body (rich tap-actions):

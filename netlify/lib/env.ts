@@ -12,6 +12,8 @@ export type RuntimeEnv = {
   personalOsNotifyEnabled: boolean;
   personalOsAllowSeed: boolean;
   deployContext: string;
+  deployUrl: string;
+  deployPrimeUrl: string;
 };
 
 let cached: RuntimeEnv | null = null;
@@ -56,6 +58,8 @@ export function readRuntimeEnv(): RuntimeEnv {
     personalOsNotifyEnabled: isTruthy(process.env.PERSONAL_OS_NOTIFY_ENABLED),
     personalOsAllowSeed: isTruthy(process.env.PERSONAL_OS_ALLOW_SEED),
     deployContext: (process.env.CONTEXT || process.env.DEPLOY_CONTEXT || "").trim().toLowerCase(),
+    deployUrl: (process.env.DEPLOY_URL || "").replace(/\/$/, ""),
+    deployPrimeUrl: (process.env.DEPLOY_PRIME_URL || "").replace(/\/$/, ""),
   };
 }
 

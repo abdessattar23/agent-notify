@@ -1,6 +1,6 @@
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { getStore } from "@netlify/blobs";
+import { getDeployStore, getStore } from "@netlify/blobs";
 import type { InboxItem } from "../../shared/notify.ts";
 import type { StoredSubscription } from "../../shared/subscription.ts";
 
@@ -33,8 +33,72 @@ export function namedStore(name: string): BlobStore {
   return openStore(name);
 }
 
-export function personalOsStore(): BlobStore {
-  return namedStore("personal-os");
+export type PersonalOsStoreMode = "site" | "deploy";
+
+export type PersonalOsStoreSelection = {
+  requestUrl?: string;
+  deployUrl?: string;
+  deployPrimeUrl?: string;
+  siteUrl?: string;
+  deployPublished?: boolean;
+};
+
+const PRODUCTION_HOST = "agent-notify.netlify.app";
+const DRAFT_PREVIEW_HOST = /^.+--agent-notify\.netlify\.app$/i;
+
+export function hostnameFrom(value: string | undefined): string {
+  const trimmed = value?.trim() ?? "";
+  if (!trimmed) return "";
+  try {
+    const url = trimmed.includes("://") ? new URL(trimmed) : new URL(`https://${trimmed}`);
+    return url.hostname.toLowerCase();
+  } catch {
+    return trimmed.replace(/^https?:\/\//i, "").split("/")[0]?.toLowerCase() ?? "";
+  }
+}
+
+export function isCanonicalProductionHost(value: string | undefined): boolean {
+  return hostnameFrom(value) === PRODUCTION_HOST;
+}
+
+export function isDraftPreviewHost(value: string | undefined): boolean {
+  return DRAFT_PREVIEW_HOST.test(hostnameFrom(value));
+}
+
+/**
+ * Site-scoped `getStore("personal-os")` is shared across every deploy.
+ * CLI drafts often set CONTEXT=production, so we never key isolation on CONTEXT.
+ * Draft/preview (`*--agent-notify.netlify.app`) and unpublished deploys use
+ * `getDeployStore({ name: "personal-os" })` — the SDK deploy-specific store
+ * (there is no `deploySpecific: true` option on getStore).
+ * The published production hostname is the only path to the site ledger.
+ */
+export function personalOsStoreMode(input: PersonalOsStoreSelection = {}): PersonalOsStoreMode {
+  if (input.deployPublished === false) return "deploy";
+  if (isDraftPreviewHost(input.requestUrl) || isDraftPreviewHost(input.deployUrl) || isDraftPreviewHost(input.deployPrimeUrl)) {
+    return "deploy";
+  }
+  if (isCanonicalProductionHost(input.requestUrl) && input.deployPublished === true) {
+    return "site";
+  }
+  if (
+    input.deployPublished === true &&
+    isCanonicalProductionHost(input.siteUrl) &&
+    !input.requestUrl &&
+    !isDraftPreviewHost(input.deployUrl) &&
+    !isDraftPreviewHost(input.deployPrimeUrl)
+  ) {
+    return "site";
+  }
+  return "deploy";
+}
+
+export function personalOsStore(input: PersonalOsStoreSelection = {}): BlobStore {
+  const mode = personalOsStoreMode(input);
+  if (isNetlifyRuntime()) {
+    return wrapNetlifyStore("personal-os", { deployScoped: mode === "deploy" });
+  }
+  return createFileStore(mode === "deploy" ? "personal-os-deploy" : "personal-os");
 }
 
 export async function putSubscription(subscription: StoredSubscription): Promise<string> {
@@ -128,8 +192,9 @@ function isNetlifyRuntime(): boolean {
   );
 }
 
-function wrapNetlifyStore(name: string): BlobStore {
-  const store = getStore(name);
+function wrapNetlifyStore(name: string, options?: { deployScoped?: boolean }): BlobStore {
+  // getDeployStore is the official deploy-specific API (not getStore({ deploySpecific: true })).
+  const store = options?.deployScoped ? getDeployStore({ name }) : getStore(name);
   return {
     async getJSON<T>(key: string) {
       const value = await store.get(key, { type: "json" });

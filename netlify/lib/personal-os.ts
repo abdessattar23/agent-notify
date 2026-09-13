@@ -12,8 +12,14 @@ import {
   type PersonalOsEvent,
   type SourceBot,
 } from "../../shared/personal-os.ts";
+import { getRuntimeEnv } from "./env.ts";
 import { consumeNamedRateLimit, type RateLimitDecision } from "./rate-limit.ts";
-import { personalOsStore, tokensStore, type BlobStore } from "./store.ts";
+import {
+  isCanonicalProductionHost,
+  isDraftPreviewHost,
+  personalOsStore,
+  type BlobStore,
+} from "./store.ts";
 
 const INDEX_KEY = "index";
 const EVENT_PREFIX = "event:";
@@ -87,8 +93,11 @@ export type PersonalOsDashboard = {
 
 export type SeedGate = {
   allowSeed: boolean;
-  context: string;
-  siteUrl: string;
+  context?: string;
+  siteUrl?: string;
+  requestUrl?: string;
+  deployUrl?: string;
+  deployPrimeUrl?: string;
 };
 
 export async function ingestPersonalOsEvent(
@@ -104,7 +113,7 @@ export async function ingestPersonalOsEvent(
   }
 
   if (options.rateLimit !== undefined) {
-    const tokens = options.tokens ?? tokensStore();
+    const tokens = options.tokens ?? store;
     const limit = await consumeNamedRateLimit(
       `personal-os:${event.sourceBot}`,
       options.rateLimit,
@@ -227,10 +236,43 @@ export async function buildPersonalOsDashboard(options: {
 
 export function personalOsSeedAllowed(gate: SeedGate): boolean {
   if (!gate.allowSeed) return false;
-  const context = gate.context.trim().toLowerCase();
-  if (context === "production") return false;
-  if (/^https:\/\/agent-notify\.netlify\.app\/?$/i.test(gate.siteUrl)) return false;
+  if (isCanonicalProductionHost(gate.requestUrl)) return false;
+  const identity = personalOsIdentityUrl(gate);
+  if (isCanonicalProductionHost(identity)) return false;
   return true;
+}
+
+export function personalOsStoreForRequest(req: Request, deployPublished?: boolean): BlobStore {
+  const env = getRuntimeEnv();
+  return personalOsStore({
+    requestUrl: req.url,
+    deployUrl: env.deployUrl,
+    deployPrimeUrl: env.deployPrimeUrl,
+    siteUrl: env.siteUrl,
+    deployPublished,
+  });
+}
+
+export function personalOsSeedAllowedForRequest(req: Request): boolean {
+  const env = getRuntimeEnv();
+  return personalOsSeedAllowed({
+    allowSeed: env.personalOsAllowSeed,
+    context: env.deployContext,
+    siteUrl: env.siteUrl,
+    requestUrl: req.url,
+    deployUrl: env.deployUrl,
+    deployPrimeUrl: env.deployPrimeUrl,
+  });
+}
+
+function personalOsIdentityUrl(gate: SeedGate): string {
+  if (isDraftPreviewHost(gate.requestUrl) || isCanonicalProductionHost(gate.requestUrl)) {
+    return gate.requestUrl ?? "";
+  }
+  if (isDraftPreviewHost(gate.deployUrl)) return gate.deployUrl ?? "";
+  if (isDraftPreviewHost(gate.deployPrimeUrl)) return gate.deployPrimeUrl ?? "";
+  if (gate.requestUrl) return gate.requestUrl;
+  return gate.deployUrl || gate.deployPrimeUrl || gate.siteUrl || "";
 }
 
 export function syntheticPersonalOsEvents(now = new Date()): PersonalOsEvent[] {
