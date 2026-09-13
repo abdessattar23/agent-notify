@@ -14,6 +14,7 @@ export type BlobStore = {
 const SUBSCRIPTIONS = "subscriptions";
 const TOKENS = "tokens";
 const INBOX = "inbox";
+const OS_ADAPTER = "os-adapter";
 const INBOX_INDEX_KEY = "index";
 const INBOX_MAX = 100;
 
@@ -27,6 +28,10 @@ export function tokensStore(): BlobStore {
 
 export function inboxStore(): BlobStore {
   return openStore(INBOX);
+}
+
+export function osAdapterStore(): BlobStore {
+  return openStore(OS_ADAPTER);
 }
 
 export async function putSubscription(subscription: StoredSubscription): Promise<string> {

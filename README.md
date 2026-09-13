@@ -14,6 +14,7 @@ On iPhone, **Add to Home Screen is required**. Safari tabs cannot receive Web Pu
 - API: health, VAPID public key, subscribe / unsubscribe, authenticated notify with action buttons, inbox Blobs store, hourly rate limit, prune of dead subscriptions (404/410)
 - Local preview server that uses the same function handlers (file-backed blobs when not on Netlify)
 - MCP server + skill under `mcp/` and `skills/agent-notify/` for agents
+- Optional Personal OS MCP adapter (four tools, **disabled by default**; see `docs/os-mcp-adapter.md`) — not a dashboard UI
 
 ## Deploy on Netlify
 
@@ -106,6 +107,7 @@ Chrome on localhost can subscribe and receive push. An iPhone still needs the Ne
 | `POST` | `/api/ping` | `X-Owner-Secret` if configured | Owner test push |
 | `GET` | `/api/inbox` / `/api/inbox/:id` | `X-Owner-Secret` if configured | Owner inbox |
 | `POST` | `/v1/notify` | `Authorization: Bearer $AGENT_API_TOKEN` | Agent push (rate limited) |
+| `POST` | `/api/os-adapter` | Per-bot bearer from `AGENT_NOTIFY_OS_BOTS` | Personal OS adapter (disabled by default) |
 
 Notify body (rich tap-actions):
 
@@ -145,6 +147,7 @@ netlify/lib/         Blobs, VAPID, auth, rate limit, inbox
 public/sw.js         Push + action clicks + offline shell
 src/                 PWA UI (home, inbox, /go router)
 shared/              Payload validation used by Functions
-mcp/                 MCP server for notify
+mcp/                 MCP server for notify + optional OS adapter tools
+docs/os-mcp-adapter.md  OS adapter threat model + schemas (off by default)
 skills/agent-notify/ Agent skill docs
 ```
