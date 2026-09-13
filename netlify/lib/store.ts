@@ -29,6 +29,14 @@ export function inboxStore(): BlobStore {
   return openStore(INBOX);
 }
 
+export function namedStore(name: string): BlobStore {
+  return openStore(name);
+}
+
+export function personalOsStore(): BlobStore {
+  return namedStore("personal-os");
+}
+
 export async function putSubscription(subscription: StoredSubscription): Promise<string> {
   const key = await subscriptionKey(subscription.endpoint);
   await subscriptionsStore().setJSON(key, subscription);

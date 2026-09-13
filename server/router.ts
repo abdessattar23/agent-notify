@@ -6,6 +6,9 @@ import ping from "../netlify/functions/ping.ts";
 import subscribe from "../netlify/functions/subscribe.ts";
 import vapidPublicKey from "../netlify/functions/vapid-public-key.ts";
 import inbox from "../netlify/functions/inbox.ts";
+import personalOsDashboard from "../netlify/functions/personal-os-dashboard.ts";
+import personalOsEvents from "../netlify/functions/personal-os-events.ts";
+import personalOsSeed from "../netlify/functions/personal-os-seed.ts";
 
 type Handler = (req: Request, context: Context) => Promise<Response> | Response;
 
@@ -15,6 +18,9 @@ const routes = new Map<string, Handler>([
   ["/api/subscribe", subscribe],
   ["/api/ping", ping],
   ["/api/inbox", inbox],
+  ["/api/personal-os/events", personalOsEvents],
+  ["/api/personal-os/dashboard", personalOsDashboard],
+  ["/api/personal-os/seed", personalOsSeed],
   ["/v1/notify", notify],
 ]);
 

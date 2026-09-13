@@ -43,12 +43,17 @@ export default function InboxPage() {
           <p className="text-xs uppercase tracking-[0.22em] text-signal">Inbox</p>
           <h1 className="mt-2 font-serif text-3xl text-foam">Recent agent pings</h1>
         </div>
-        <Button asChild variant="secondary" size="sm">
-          <Link to="/">
-            <ArrowLeft className="size-4" />
-            Home
-          </Link>
-        </Button>
+        <div className="flex gap-2">
+          <Button asChild variant="secondary" size="sm">
+            <Link to="/os">Personal OS</Link>
+          </Button>
+          <Button asChild variant="secondary" size="sm">
+            <Link to="/">
+              <ArrowLeft className="size-4" />
+              Home
+            </Link>
+          </Button>
+        </div>
       </header>
 
       <Card>

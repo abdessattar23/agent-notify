@@ -7,6 +7,9 @@ export type HealthResponse = {
   agentTokenConfigured: boolean;
   ownerSetupRequired: boolean;
   subscriptionCount: number;
+  personalOsBotsConfigured?: boolean;
+  personalOsNotifyEnabled?: boolean;
+  personalOsSeedAllowed?: boolean;
 };
 
 export type NotifySummary = {
@@ -96,6 +99,95 @@ export async function fetchInbox(secret: string, limit = 50): Promise<InboxItem[
     throw new Error(data.error ?? `Inbox failed (${res.status})`);
   }
   return data.items ?? [];
+}
+
+export type PersonalOsKpis = {
+  otelOpportunities: number;
+  otelContributions: number;
+  cfpsFound: number;
+  cfpsDrafted: number;
+  cfpsSubmitted: number;
+  cfpsAccepted: number;
+  jobFits: number;
+  jobApplications: number;
+  jobInterviews: number;
+  talkPractices: number;
+  talkFullRuns: number;
+  talkWeakSections: number;
+  engineeringMissions: number;
+  personalOpsResolved: number;
+};
+
+export type PersonalOsEventView = {
+  eventId: string;
+  sourceBot: string;
+  timestamp: string;
+  timestampLocal: string;
+  area: string;
+  status: string;
+  title: string;
+  impact?: string;
+  sourceUrl?: string;
+  nextAction?: string;
+  decisionNeeded?: boolean;
+  approvalNeeded?: boolean;
+  deadlineLocal?: string;
+  nextRunLocal?: string;
+  sample?: boolean;
+};
+
+export type PersonalOsBotView = {
+  sourceBot: string;
+  lastRun: string | null;
+  nextRun: string | null;
+  lastRunLocal: string | null;
+  nextRunLocal: string | null;
+  stale: boolean;
+  error: boolean;
+  blockers: number;
+  pendingApprovals: number;
+  sourceLinks: string[];
+};
+
+export type PersonalOsDashboard = {
+  ok: boolean;
+  timezone: string;
+  generatedAt: string;
+  generatedAtLocal: string;
+  sampleDataPresent: boolean;
+  seedAllowed: boolean;
+  notifyEnabled: boolean;
+  today: PersonalOsEventView[];
+  outcomes: PersonalOsKpis;
+  bots: PersonalOsBotView[];
+  routines: PersonalOsEventView[];
+  decisions: PersonalOsEventView[];
+  approvals: PersonalOsEventView[];
+  failures: PersonalOsEventView[];
+  error?: string;
+};
+
+export async function fetchPersonalOsDashboard(secret: string): Promise<PersonalOsDashboard> {
+  const res = await fetch("/api/personal-os/dashboard", {
+    headers: ownerHeaders(secret),
+  });
+  const data = (await res.json()) as PersonalOsDashboard;
+  if (!res.ok) {
+    throw new Error(data.error ?? `Personal OS dashboard failed (${res.status})`);
+  }
+  return data;
+}
+
+export async function seedPersonalOsSample(secret: string): Promise<{ stored: number }> {
+  const res = await fetch("/api/personal-os/seed", {
+    method: "POST",
+    headers: ownerHeaders(secret),
+  });
+  const data = (await res.json()) as { ok?: boolean; stored?: number; error?: string };
+  if (!res.ok) {
+    throw new Error(data.error ?? `Personal OS seed failed (${res.status})`);
+  }
+  return { stored: data.stored ?? 0 };
 }
 
 export async function fetchInboxItem(id: string, secret: string): Promise<InboxItem> {
